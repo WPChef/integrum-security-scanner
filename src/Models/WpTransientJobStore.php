@@ -5,14 +5,14 @@
  * Transient key names are identical to the previous inline implementation so
  * in-flight jobs survive the refactor.
  *
- * @package Llar\Imunify\Models
+ * @package Llar\SecurityScanner\Models
  */
 
 declare( strict_types = 1 );
 
-namespace Llar\Imunify\Models;
+namespace Llar\SecurityScanner\Models;
 
-use Llar\Imunify\Contracts\JobStoreInterface;
+use Llar\SecurityScanner\Contracts\JobStoreInterface;
 
 /**
  * Persists per-job scan state through set/get/delete_transient().
@@ -22,7 +22,7 @@ final class WpTransientJobStore implements JobStoreInterface {
 	/**
 	 * Transient name prefix shared by every per-job key.
 	 */
-	private const PREFIX = 'llar_imunify_';
+	private const PREFIX = 'security_scanner_';
 
 	/**
 	 * Transient lifetime (1 hour) — long enough for a scan to finish, short

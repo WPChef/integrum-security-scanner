@@ -9,24 +9,24 @@
  *   4. For action=needs_upload  -> POST /jobs/{id}/upload (multipart) per file.
  *   5. When is_complete -> verdicts are read from the same /results payload.
  *
- * @package Llar\Imunify\Models
+ * @package Llar\SecurityScanner\Models
  */
 
 declare( strict_types = 1 );
 
-namespace Llar\Imunify\Models;
+namespace Llar\SecurityScanner\Models;
 
-use Llar\Imunify\Contracts\CredentialStorageInterface;
-use Llar\Imunify\Contracts\HttpClientInterface;
-use Llar\Imunify\Contracts\HttpException;
-use Llar\Imunify\Contracts\JobStoreInterface;
-use Llar\Imunify\Contracts\LoggerInterface;
-use Llar\Imunify\Contracts\ScanException;
+use Llar\SecurityScanner\Contracts\CredentialStorageInterface;
+use Llar\SecurityScanner\Contracts\HttpClientInterface;
+use Llar\SecurityScanner\Contracts\HttpException;
+use Llar\SecurityScanner\Contracts\JobStoreInterface;
+use Llar\SecurityScanner\Contracts\LoggerInterface;
+use Llar\SecurityScanner\Contracts\ScanException;
 
 /**
  * Talks directly to Imunify Connect using a job model: start -> poll -> results.
  */
-final class ImunifyScanner implements \Llar\Imunify\Contracts\ScannerInterface {
+final class ImunifyScanner implements \Llar\SecurityScanner\Contracts\ScannerInterface {
 
 	/**
 	 * Files larger than this are skipped to keep uploads bounded.
@@ -124,7 +124,7 @@ final class ImunifyScanner implements \Llar\Imunify\Contracts\ScannerInterface {
 		private string $domain,
 		?string $base = null
 	) {
-		$this->base = $base ?? ( defined( 'LLAR_IMUNIFY_SCANNER_API_BASE' ) ? LLAR_IMUNIFY_SCANNER_API_BASE : 'https://connect.imunify.com' );
+		$this->base = $base ?? ( defined( 'LLAR_SECURITY_SCANNER_SCANNER_API_BASE' ) ? LLAR_SECURITY_SCANNER_SCANNER_API_BASE : 'https://connect.imunify.com' );
 	}
 
 	/**

@@ -2,7 +2,7 @@
 
 /* Scope utilities inside the plugin root so they reliably override WP admin
    selectors without leaking into the rest of wp-admin. */
-@variant llar (&:is(#llar-imunify-app, #llar-imunify-app *));
+@variant llar (&:is(#security-scanner-app, #security-scanner-app *));
 
 @theme {
   --color-primary-50: #eef2ff;
@@ -25,7 +25,7 @@
  * badges and scan-progress elements at runtime.
  */
 
-#llar-imunify-app {
+#security-scanner-app {
   --llar-muted: #64748b;
   --llar-danger: #dc2626;
   --llar-tree-hover: #f8fafc;
@@ -33,10 +33,10 @@
 
 /* Spinner on the Start button while the manifest is being built server-side
    and the page has not yet reloaded with the active job. */
-.llar-imunify .llar-scan-actions__start.is-loading {
+.security-scanner .llar-scan-actions__start.is-loading {
   position: relative;
 }
-.llar-imunify .llar-scan-actions__start.is-loading::after {
+.security-scanner .llar-scan-actions__start.is-loading::after {
   content: '';
   display: inline-block;
   width: 14px;
@@ -53,7 +53,7 @@
 }
 
 /* Results tree ----------------------------------------------------------- */
-.llar-imunify .llar-tree {
+.security-scanner .llar-tree {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 13px;
   margin: 0;
@@ -62,21 +62,21 @@
   padding: 0;
 }
 
-.llar-imunify .llar-tree__list {
+.security-scanner .llar-tree__list {
   list-style: none;
   margin: 0;
   padding: 0 0 0 18px;
 }
 
-.llar-imunify .llar-tree__list.is-root {
+.security-scanner .llar-tree__list.is-root {
   padding-left: 0;
 }
 
-.llar-imunify .llar-tree__folder {
+.security-scanner .llar-tree__folder {
   margin: 2px 0;
 }
 
-.llar-imunify .llar-tree__toggle {
+.security-scanner .llar-tree__toggle {
   color: var(--llar-muted);
   cursor: pointer;
   display: inline-block;
@@ -84,48 +84,48 @@
   width: 14px;
 }
 
-.llar-imunify .llar-tree__folder-name {
+.security-scanner .llar-tree__folder-name {
   color: #1e293b;
   font-weight: 600;
 }
 
-.llar-imunify .llar-tree__folder-name.has-problems {
+.security-scanner .llar-tree__folder-name.has-problems {
   color: var(--llar-danger);
 }
 
-.llar-imunify .llar-tree__file {
+.security-scanner .llar-tree__file {
   border-radius: 6px;
   margin: 1px 0 1px 14px;
   padding: 5px 8px;
   transition: background-color .15s ease;
 }
 
-.llar-imunify .llar-tree__file:hover {
+.security-scanner .llar-tree__file:hover {
   background: var(--llar-tree-hover);
 }
 
-.llar-imunify .llar-tree__file-name {
+.security-scanner .llar-tree__file-name {
   color: #334155;
   margin-right: 8px;
 }
 
-.llar-imunify .llar-tree__threat {
+.security-scanner .llar-tree__threat {
   color: var(--llar-muted);
   font-style: normal;
   margin-left: 6px;
 }
 
-.llar-imunify .llar-tree__file.is-suspicious {
+.security-scanner .llar-tree__file.is-suspicious {
   background: #fff7ed;
 }
 
-.llar-imunify .llar-tree__file.is-infected {
+.security-scanner .llar-tree__file.is-infected {
   background: #fef2f2;
   color: #b91c1c;
 }
 
 /* Severity badges -------------------------------------------------------- */
-.llar-imunify .llar-sev {
+.security-scanner .llar-sev {
   border-radius: 9999px;
   color: #fff;
   font-size: 10px;
@@ -136,8 +136,8 @@
   text-transform: uppercase;
 }
 
-.llar-imunify .llar-sev--critical { background: #b91c1c; }
-.llar-imunify .llar-sev--high     { background: #dc2626; }
-.llar-imunify .llar-sev--medium   { background: #d97706; }
-.llar-imunify .llar-sev--low      { background: #0284c7; }
-.llar-imunify .llar-sev--info     { background: #64748b; }
+.security-scanner .llar-sev--critical { background: #b91c1c; }
+.security-scanner .llar-sev--high     { background: #dc2626; }
+.security-scanner .llar-sev--medium   { background: #d97706; }
+.security-scanner .llar-sev--low      { background: #0284c7; }
+.security-scanner .llar-sev--info     { background: #64748b; }

@@ -6,17 +6,17 @@
  * transport layer. Returns a UI-ready notice; the controller decides how to
  * surface it.
  *
- * @package Llar\Imunify\Services
+ * @package Llar\SecurityScanner\Services
  */
 
 declare( strict_types = 1 );
 
-namespace Llar\Imunify\Services;
+namespace Llar\SecurityScanner\Services;
 
-use Llar\Imunify\Contracts\CredentialStorageInterface;
-use Llar\Imunify\Contracts\HttpClientInterface;
-use Llar\Imunify\Contracts\HttpException;
-use Llar\Imunify\Contracts\LoggerInterface;
+use Llar\SecurityScanner\Contracts\CredentialStorageInterface;
+use Llar\SecurityScanner\Contracts\HttpClientInterface;
+use Llar\SecurityScanner\Contracts\HttpException;
+use Llar\SecurityScanner\Contracts\LoggerInterface;
 
 /**
  * Single responsibility: turn (domain, email) into a stored site key.
@@ -53,7 +53,7 @@ final class LicensingService {
 		if ( '' === $domain || ! is_email( $email ) ) {
 			return array(
 				'type'    => 'error',
-				'message' => __( 'Please provide a valid email address.', 'llar-imunify' ),
+				'message' => __( 'Please provide a valid email address.', 'security-scanner' ),
 			);
 		}
 
@@ -71,14 +71,14 @@ final class LicensingService {
 
 			return array(
 				'type'    => 'error',
-				'message' => __( 'Could not reach the licensing service. Please try again.', 'llar-imunify' ),
+				'message' => __( 'Could not reach the licensing service. Please try again.', 'security-scanner' ),
 			);
 		}
 
 		if ( 400 === $resp['code'] ) {
 			return array(
 				'type'    => 'error',
-				'message' => __( 'This domain is already registered. Paste the site key in the field below and save it manually.', 'llar-imunify' ),
+				'message' => __( 'This domain is already registered. Paste the site key in the field below and save it manually.', 'security-scanner' ),
 			);
 		}
 
@@ -87,7 +87,7 @@ final class LicensingService {
 
 			return array(
 				'type'    => 'error',
-				'message' => __( 'Could not obtain a site key. Please try again.', 'llar-imunify' ),
+				'message' => __( 'Could not obtain a site key. Please try again.', 'security-scanner' ),
 			);
 		}
 
@@ -98,7 +98,7 @@ final class LicensingService {
 			'type'    => 'success',
 			'message' => sprintf(
 				/* translators: %s: plan name. */
-				__( 'Site registered. Plan: %s.', 'llar-imunify' ),
+				__( 'Site registered. Plan: %s.', 'security-scanner' ),
 				(string) ( $body['plan'] ?? 'free' )
 			),
 		);

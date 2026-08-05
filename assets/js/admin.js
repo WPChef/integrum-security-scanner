@@ -1,7 +1,7 @@
 	( function ( document, window ) {
 		'use strict';
 
-		const CFG = window.llarImunify || {};
+		const CFG = window.llarSecurityScanner || {};
 
 		// ── Key field → button label toggle ──────────────────────────────
 		const keyField = document.getElementById( 'llar-key' );
@@ -33,7 +33,7 @@
 				}
 
 				const data = new URLSearchParams();
-				data.append( 'action', 'llar_imunify_stop' );
+				data.append( 'action', 'security_scanner_stop' );
 				data.append( 'nonce', CFG.nonce );
 
 				fetch( CFG.ajaxUrl, {
@@ -54,7 +54,7 @@
 							startBtn.disabled = false;
 						}
 						// Surface a brief confirmation at the top of the plugin page.
-						const wrap = document.querySelector( '.wrap.llar-imunify' );
+						const wrap = document.querySelector( '.wrap.security-scanner' );
 						if ( wrap ) {
 							const notice = document.createElement( 'div' );
 							notice.className = 'notice notice-info is-dismissible';
@@ -199,7 +199,7 @@
 	}
 
 	function pollStatus() {
-		fetchJSON( 'llar_imunify_status', { job_id: jobId } )
+		fetchJSON( 'security_scanner_status', { job_id: jobId } )
 			.then( onStatus )
 			.catch( function () {
 				progressLabel.textContent = CFG.i18n ? CFG.i18n.error : 'error';
@@ -276,7 +276,7 @@
 	}
 
 	function loadResults() {
-		fetchJSON( 'llar_imunify_results', { job_id: jobId } )
+		fetchJSON( 'security_scanner_results', { job_id: jobId } )
 			.then( renderResults )
 			.catch( function () {
 				if ( resultsSection ) {

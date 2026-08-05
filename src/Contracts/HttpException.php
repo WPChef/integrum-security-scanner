@@ -2,12 +2,12 @@
 /**
  * HTTP exception.
  *
- * @package Llar\Imunify\Contracts
+ * @package Llar\SecurityScanner\Contracts
  */
 
 declare( strict_types = 1 );
 
-namespace Llar\Imunify\Contracts;
+namespace Llar\SecurityScanner\Contracts;
 
 class HttpException extends \RuntimeException {
 

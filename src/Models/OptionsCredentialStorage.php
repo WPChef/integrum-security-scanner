@@ -2,14 +2,14 @@
 /**
  * Credential storage backed by wp_options.
  *
- * @package Llar\Imunify\Models
+ * @package Llar\SecurityScanner\Models
  */
 
 declare( strict_types = 1 );
 
-namespace Llar\Imunify\Models;
+namespace Llar\SecurityScanner\Models;
 
-use Llar\Imunify\Contracts\CredentialStorageInterface;
+use Llar\SecurityScanner\Contracts\CredentialStorageInterface;
 
 /**
  * Stores site_id/site_key in a single option with autoload=false.
@@ -27,7 +27,7 @@ final class OptionsCredentialStorage implements CredentialStorageInterface {
 	 * @param string|null $key Override option key (used in tests).
 	 */
 	public function __construct( ?string $key = null ) {
-		$this->key = $key ?? ( defined( 'LLAR_IMUNIFY_OPTION_KEY' ) ? LLAR_IMUNIFY_OPTION_KEY : 'llar_imunify_credentials' );
+		$this->key = $key ?? ( defined( 'LLAR_SECURITY_SCANNER_OPTION_KEY' ) ? LLAR_SECURITY_SCANNER_OPTION_KEY : 'security_scanner_credentials' );
 	}
 
 	/**

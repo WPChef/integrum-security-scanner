@@ -2,15 +2,15 @@
 /**
  * Default HTTP client built on top of WP HTTP API.
  *
- * @package Llar\Imunify\Models
+ * @package Llar\SecurityScanner\Models
  */
 
 declare( strict_types = 1 );
 
-namespace Llar\Imunify\Models;
+namespace Llar\SecurityScanner\Models;
 
-use Llar\Imunify\Contracts\HttpClientInterface;
-use Llar\Imunify\Contracts\HttpException;
+use Llar\SecurityScanner\Contracts\HttpClientInterface;
+use Llar\SecurityScanner\Contracts\HttpException;
 
 /**
  * Wraps wp_remote_get/wp_remote_post and normalises the response shape.
@@ -26,12 +26,12 @@ final class WpHttpClient implements HttpClientInterface {
 	/**
 	 * Optional logger; null = no request-level logging.
 	 */
-	private ?\Llar\Imunify\Contracts\LoggerInterface $logger;
+	private ?\Llar\SecurityScanner\Contracts\LoggerInterface $logger;
 
 	/**
-	 * @param \Llar\Imunify\Contracts\LoggerInterface|null $logger Logger.
+	 * @param \Llar\SecurityScanner\Contracts\LoggerInterface|null $logger Logger.
 	 */
-	public function __construct( ?\Llar\Imunify\Contracts\LoggerInterface $logger = null ) {
+	public function __construct( ?\Llar\SecurityScanner\Contracts\LoggerInterface $logger = null ) {
 		$this->logger = $logger;
 	}
 
@@ -80,7 +80,7 @@ final class WpHttpClient implements HttpClientInterface {
 		// Content-Type: application/x-www-form-urlencoded, which the scanner
 		// rejects with HTTP 415. We therefore build a real multipart/form-data
 		// body by hand and pin the Content-Type with a boundary we control.
-		$boundary = 'llar-imunify-' . wp_generate_password( 16, false );
+		$boundary = 'security-scanner-' . wp_generate_password( 16, false );
 		$eol      = "\r\n";
 
 		$body  = '--' . $boundary . $eol;

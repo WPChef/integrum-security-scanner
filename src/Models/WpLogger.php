@@ -6,14 +6,14 @@
  * `wp-content/debug.log`; otherwise it lands in the server PHP error log.
  * No custom file is created.
  *
- * @package Llar\Imunify\Models
+ * @package Llar\SecurityScanner\Models
  */
 
 declare( strict_types = 1 );
 
-namespace Llar\Imunify\Models;
+namespace Llar\SecurityScanner\Models;
 
-use Llar\Imunify\Contracts\LoggerInterface;
+use Llar\SecurityScanner\Contracts\LoggerInterface;
 
 /**
  * Thin adapter over error_log().

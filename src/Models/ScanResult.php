@@ -2,12 +2,12 @@
 /**
  * Scan result DTO.
  *
- * @package Llar\Imunify\Models
+ * @package Llar\SecurityScanner\Models
  */
 
 declare( strict_types = 1 );
 
-namespace Llar\Imunify\Models;
+namespace Llar\SecurityScanner\Models;
 
 /**
  * Immutable scan result for a single file.

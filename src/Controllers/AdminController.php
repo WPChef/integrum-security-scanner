@@ -2,19 +2,19 @@
 /**
  * The single admin page: key, masks, scan button, results.
  *
- * @package Llar\Imunify\Controllers
+ * @package Llar\SecurityScanner\Controllers
  */
 
 declare( strict_types = 1 );
 
-namespace Llar\Imunify\Controllers;
+namespace Llar\SecurityScanner\Controllers;
 
-use Llar\Imunify\Contracts\CredentialStorageInterface;
-use Llar\Imunify\Contracts\LoggerInterface;
-use Llar\Imunify\Contracts\ScanException;
-use Llar\Imunify\Contracts\ScannerInterface;
-use Llar\Imunify\Models\ScanResult;
-use Llar\Imunify\Services\LicensingService;
+use Llar\SecurityScanner\Contracts\CredentialStorageInterface;
+use Llar\SecurityScanner\Contracts\LoggerInterface;
+use Llar\SecurityScanner\Contracts\ScanException;
+use Llar\SecurityScanner\Contracts\ScannerInterface;
+use Llar\SecurityScanner\Models\ScanResult;
+use Llar\SecurityScanner\Services\LicensingService;
 
 /**
  * Registers the menu, renders the page, handles the two POST forms
@@ -22,12 +22,12 @@ use Llar\Imunify\Services\LicensingService;
  */
 final class AdminController {
 
-	private const SLUG            = 'llar-imunify';
-	private const NONCE_GET_KEY   = 'llar_imunify_get_key';
-	private const NONCE_START     = 'llar_imunify_start_scan';
-	private const NONCE_POLL      = 'llar_imunify_poll';
+	private const SLUG            = 'security-scanner';
+	private const NONCE_GET_KEY   = 'security_scanner_get_key';
+	private const NONCE_START     = 'security_scanner_start_scan';
+	private const NONCE_POLL      = 'security_scanner_poll';
 	private const CAPABILITY      = 'manage_options';
-	private const OPTION_SETTINGS = 'llar_imunify_scan_settings';
+	private const OPTION_SETTINGS = 'security_scanner_scan_settings';
 
 	/**
 	 * Constructor.
@@ -53,9 +53,9 @@ final class AdminController {
 		add_action( 'admin_init', array( $this, 'handle_post' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue' ) );
 
-		add_action( 'wp_ajax_llar_imunify_status', array( $this, 'ajax_status' ) );
-		add_action( 'wp_ajax_llar_imunify_stop', array( $this, 'ajax_stop' ) );
-		add_action( 'wp_ajax_llar_imunify_results', array( $this, 'ajax_results' ) );
+		add_action( 'wp_ajax_security_scanner_status', array( $this, 'ajax_status' ) );
+		add_action( 'wp_ajax_security_scanner_stop', array( $this, 'ajax_stop' ) );
+		add_action( 'wp_ajax_security_scanner_results', array( $this, 'ajax_results' ) );
 	}
 
 	/**
@@ -63,8 +63,8 @@ final class AdminController {
 	 */
 	public function add_menu(): void {
 		add_menu_page(
-			__( 'Imunify Connect', 'llar-imunify' ),
-			__( 'Imunify Scan', 'llar-imunify' ),
+			__( 'File Security Scanner', 'security-scanner' ),
+			__( 'File Security', 'security-scanner' ),
 			self::CAPABILITY,
 			self::SLUG,
 			array( $this, 'render' ),
@@ -84,37 +84,37 @@ final class AdminController {
 		}
 
 		// Pre-built Tailwind stylesheet: utilities are scoped under
-		// #llar-imunify-app and preflight is disabled so the WP admin
+		// #security-scanner-app and preflight is disabled so the WP admin
 		// chrome is never affected. Rebuild with:
-		//   node node_modules/tailwindcss/lib/cli.js -i tailwind-src.css -o wp-content/plugins/llar-imunify/assets/css/tailwind.build.css --minify
+		//   node node_modules/tailwindcss/lib/cli.js -i tailwind-src.css -o wp-content/plugins/security-scanner/assets/css/tailwind.build.css --minify
 		wp_enqueue_style(
-			'llar-imunify-admin',
-			LLAR_IMUNIFY_URL . 'assets/css/tailwind.build.css',
+			'security-scanner-admin',
+			LLAR_SECURITY_SCANNER_URL . 'assets/css/tailwind.build.css',
 			array(),
-			LLAR_IMUNIFY_VERSION
+			LLAR_SECURITY_SCANNER_VERSION
 		);
 
 		wp_enqueue_script(
-			'llar-imunify-admin',
-			LLAR_IMUNIFY_URL . 'assets/js/admin.js',
+			'security-scanner-admin',
+			LLAR_SECURITY_SCANNER_URL . 'assets/js/admin.js',
 			array(),
-			LLAR_IMUNIFY_VERSION,
+			LLAR_SECURITY_SCANNER_VERSION,
 			true
 		);
 
 		wp_localize_script(
-			'llar-imunify-admin',
-			'llarImunify',
+			'security-scanner-admin',
+			'llarSecurityScanner',
 			array(
 				'ajaxUrl' => admin_url( 'admin-ajax.php' ),
 				'nonce'   => wp_create_nonce( self::NONCE_POLL ),
 				'i18n'    => array(
-					'stay'     => __( 'Do not close this page until the scan completes.', 'llar-imunify' ),
-					'error'    => __( 'Scan failed. Please try again.', 'llar-imunify' ),
-					'saveKey'  => __( 'Save key', 'llar-imunify' ),
-					'register' => __( 'Register', 'llar-imunify' ),
-					'stopped'  => __( 'Scan stopped.', 'llar-imunify' ),
-					'stopping' => __( 'Stopping…', 'llar-imunify' ),
+					'stay'     => __( 'Do not close this page until the scan completes.', 'security-scanner' ),
+					'error'    => __( 'Scan failed. Please try again.', 'security-scanner' ),
+					'saveKey'  => __( 'Save key', 'security-scanner' ),
+					'register' => __( 'Register', 'security-scanner' ),
+					'stopped'  => __( 'Scan stopped.', 'security-scanner' ),
+					'stopping' => __( 'Stopping…', 'security-scanner' ),
 				),
 			)
 		);
@@ -126,8 +126,8 @@ final class AdminController {
 	public function handle_post(): void {
 		$action = '';
 		// phpcs:disable WordPress.Security.NonceVerification.Missing -- nonce verified inside each handler.
-		if ( isset( $_POST['llar_imunify_action'] ) ) {
-			$action = sanitize_text_field( wp_unslash( $_POST['llar_imunify_action'] ) );
+		if ( isset( $_POST['security_scanner_action'] ) ) {
+			$action = sanitize_text_field( wp_unslash( $_POST['security_scanner_action'] ) );
 		}
 		// phpcs:enable WordPress.Security.NonceVerification.Missing
 
@@ -136,7 +136,7 @@ final class AdminController {
 		}
 
 		if ( ! current_user_can( self::CAPABILITY ) ) {
-			wp_die( esc_html__( 'Insufficient permissions.', 'llar-imunify' ) );
+			wp_die( esc_html__( 'Insufficient permissions.', 'security-scanner' ) );
 		}
 
 		switch ( $action ) {
@@ -155,7 +155,7 @@ final class AdminController {
 	private function handle_get_key(): void {
 		check_admin_referer( self::NONCE_GET_KEY );
 
-		$manual_key = isset( $_POST['llar_imunify_key'] ) ? sanitize_text_field( wp_unslash( $_POST['llar_imunify_key'] ) ) : '';
+		$manual_key = isset( $_POST['security_scanner_key'] ) ? sanitize_text_field( wp_unslash( $_POST['security_scanner_key'] ) ) : '';
 
 		// When user provides a key manually, store it directly without API call.
 		if ( '' !== $manual_key ) {
@@ -165,14 +165,14 @@ final class AdminController {
 			$this->redirect(
 				array(
 					'type'    => 'success',
-					'message' => __( 'Site key saved.', 'llar-imunify' ),
+					'message' => __( 'Site key saved.', 'security-scanner' ),
 				)
 			);
 			return;
 		}
 
-		$domain = (string) apply_filters( 'llar_imunify_site_domain', '' );
-		$email  = isset( $_POST['llar_imunify_email'] ) ? sanitize_email( wp_unslash( $_POST['llar_imunify_email'] ) ) : '';
+		$domain = (string) apply_filters( 'security_scanner_site_domain', '' );
+		$email  = isset( $_POST['security_scanner_email'] ) ? sanitize_email( wp_unslash( $_POST['security_scanner_email'] ) ) : '';
 
 		$this->redirect( $this->licensing->register( (string) $domain, $email ) );
 	}
@@ -185,16 +185,16 @@ final class AdminController {
 
 		$allowed = $this->directory_options();
 
-		$dir_slugs     = $this->sanitize_directory_slugs( $_POST['llar_imunify_directories'] ?? array(), $allowed ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized, WordPress.Security.ValidatedSanitizedInput.MissingUnslash -- sanitised inside sanitize_directory_slugs().
-		$include_masks = $this->parse_masks( $_POST['llar_imunify_include'] ?? '' ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized, WordPress.Security.ValidatedSanitizedInput.MissingUnslash -- sanitised inside parse_masks().
-		$exclude_masks = $this->parse_masks( $_POST['llar_imunify_exclude'] ?? '' ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized, WordPress.Security.ValidatedSanitizedInput.MissingUnslash -- sanitised inside parse_masks().
+		$dir_slugs     = $this->sanitize_directory_slugs( $_POST['security_scanner_directories'] ?? array(), $allowed ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized, WordPress.Security.ValidatedSanitizedInput.MissingUnslash -- sanitised inside sanitize_directory_slugs().
+		$include_masks = $this->parse_masks( $_POST['security_scanner_include'] ?? '' ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized, WordPress.Security.ValidatedSanitizedInput.MissingUnslash -- sanitised inside parse_masks().
+		$exclude_masks = $this->parse_masks( $_POST['security_scanner_exclude'] ?? '' ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized, WordPress.Security.ValidatedSanitizedInput.MissingUnslash -- sanitised inside parse_masks().
 
 		// Persist the user's selections so the form keeps its state across reloads
 		// (even when the scan fails, e.g. quota exceeded — the user can retry).
 		$this->store_scan_settings(
 			$dir_slugs,
-			isset( $_POST['llar_imunify_include'] ) ? sanitize_text_field( wp_unslash( $_POST['llar_imunify_include'] ) ) : '', // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.MissingUnslash -- unslashed above.
-			isset( $_POST['llar_imunify_exclude'] ) ? sanitize_text_field( wp_unslash( $_POST['llar_imunify_exclude'] ) ) : '' // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.MissingUnslash -- unslashed above.
+			isset( $_POST['security_scanner_include'] ) ? sanitize_text_field( wp_unslash( $_POST['security_scanner_include'] ) ) : '', // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.MissingUnslash -- unslashed above.
+			isset( $_POST['security_scanner_exclude'] ) ? sanitize_text_field( wp_unslash( $_POST['security_scanner_exclude'] ) ) : '' // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.MissingUnslash -- unslashed above.
 		);
 
 		$directories = $this->slugs_to_paths( $dir_slugs, $allowed );
@@ -216,8 +216,8 @@ final class AdminController {
 			$is_key_error = 401 === $e->getCode();
 			$real_message = $e->getMessage();
 			$message      = $is_key_error
-				? __( 'The site key is missing or was rejected. Use the "Get site key" form above to obtain a new key, then start the scan again.', 'llar-imunify' )
-				: ( '' !== $real_message ? $real_message : __( 'Could not start the scan. Please try again in a moment.', 'llar-imunify' ) );
+				? __( 'The site key is missing or was rejected. Use the "Get site key" form above to obtain a new key, then start the scan again.', 'security-scanner' )
+				: ( '' !== $real_message ? $real_message : __( 'Could not start the scan. Please try again in a moment.', 'security-scanner' ) );
 
 			$this->redirect(
 				array(
@@ -228,17 +228,17 @@ final class AdminController {
 			return;
 		}
 
-		set_transient( 'llar_imunify_active_job', $job_id, HOUR_IN_SECONDS );
+		set_transient( 'security_scanner_active_job', $job_id, HOUR_IN_SECONDS );
 		// One-shot marker consumed by render() on the FIRST page load after the
 		// PRG redirect. It is NOT a persistent "scan in progress" flag: once
 		// consumed, a page reload no longer surfaces a running scan, so the UI
 		// returns to idle and the scan is not silently resumed by the poller.
-		set_transient( 'llar_imunify_started_job', $job_id, 5 * MINUTE_IN_SECONDS );
+		set_transient( 'security_scanner_started_job', $job_id, 5 * MINUTE_IN_SECONDS );
 
 		$this->redirect(
 			array(
 				'type'    => 'success',
-				'message' => __( 'Scan started. Do not close this page until it completes.', 'llar-imunify' ),
+				'message' => __( 'Scan started. Do not close this page until it completes.', 'security-scanner' ),
 			)
 		);
 	}
@@ -256,8 +256,8 @@ final class AdminController {
 		$job_id = '';
 		if ( isset( $_POST['job_id'] ) ) {
 			$job_id = sanitize_text_field( wp_unslash( $_POST['job_id'] ) );
-		} elseif ( get_transient( 'llar_imunify_active_job' ) ) {
-			$job_id = (string) get_transient( 'llar_imunify_active_job' );
+		} elseif ( get_transient( 'security_scanner_active_job' ) ) {
+			$job_id = (string) get_transient( 'security_scanner_active_job' );
 		}
 
 		if ( '' === $job_id ) {
@@ -271,7 +271,7 @@ final class AdminController {
 		}
 
 		if ( in_array( $status['status'], array( 'completed', 'done', 'failed' ), true ) ) {
-			delete_transient( 'llar_imunify_active_job' );
+			delete_transient( 'security_scanner_active_job' );
 		}
 
 		wp_send_json_success( $status );
@@ -292,7 +292,7 @@ final class AdminController {
 			wp_send_json_error( array( 'message' => 'forbidden' ), 403 );
 		}
 
-		delete_transient( 'llar_imunify_active_job' );
+		delete_transient( 'security_scanner_active_job' );
 
 		wp_send_json_success( array( 'status' => 'stopped' ) );
 	}
@@ -310,8 +310,8 @@ final class AdminController {
 		$job_id = '';
 		if ( isset( $_POST['job_id'] ) ) {
 			$job_id = sanitize_text_field( wp_unslash( $_POST['job_id'] ) );
-		} elseif ( get_transient( 'llar_imunify_active_job' ) ) {
-			$job_id = (string) get_transient( 'llar_imunify_active_job' );
+		} elseif ( get_transient( 'security_scanner_active_job' ) ) {
+			$job_id = (string) get_transient( 'security_scanner_active_job' );
 		}
 
 		if ( '' === $job_id ) {
@@ -348,7 +348,7 @@ final class AdminController {
 		$dir_options = $this->directory_options();
 		$settings    = $this->load_scan_settings();
 
-		require LLAR_IMUNIFY_DIR . 'src/Views/page.php';
+		require LLAR_SECURITY_SCANNER_DIR . 'src/Views/page.php';
 	}
 
 	/**
@@ -488,7 +488,7 @@ final class AdminController {
 		);
 
 		// E2E test: if a test directory was set via transient, add it.
-		$e2e_dir = get_transient( 'llar_imunify_e2e_dir' );
+		$e2e_dir = get_transient( 'security_scanner_e2e_dir' );
 		if ( false !== $e2e_dir && is_string( $e2e_dir ) && '' !== $e2e_dir ) {
 			$options['e2e-test'] = $e2e_dir;
 		}
@@ -502,7 +502,7 @@ final class AdminController {
 	 * @param array{type: string, message: string} $notice Notice.
 	 */
 	private function redirect( array $notice ): void {
-		set_transient( 'llar_imunify_notice', $notice, 60 );
+		set_transient( 'security_scanner_notice', $notice, 60 );
 		wp_safe_redirect( admin_url( 'admin.php?page=' . self::SLUG ) );
 		exit;
 	}
@@ -518,9 +518,9 @@ final class AdminController {
 	 * @return string Job id, or '' when no scan was just started.
 	 */
 	private function consume_started_job(): string {
-		$job_id = get_transient( 'llar_imunify_started_job' );
+		$job_id = get_transient( 'security_scanner_started_job' );
 		if ( false !== $job_id ) {
-			delete_transient( 'llar_imunify_started_job' );
+			delete_transient( 'security_scanner_started_job' );
 			return (string) $job_id;
 		}
 		return '';
@@ -532,9 +532,9 @@ final class AdminController {
 	 * @return array{type: string, message: string}|null
 	 */
 	private function consume_notice(): ?array {
-		$notice = get_transient( 'llar_imunify_notice' );
+		$notice = get_transient( 'security_scanner_notice' );
 		if ( is_array( $notice ) ) {
-			delete_transient( 'llar_imunify_notice' );
+			delete_transient( 'security_scanner_notice' );
 			return $notice;
 		}
 		return null;

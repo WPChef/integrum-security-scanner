@@ -3,12 +3,12 @@
  * Collects candidate files for scanning by walking directories
  * and filtering through include/exclude glob masks.
  *
- * @package Llar\Imunify\Models
+ * @package Llar\SecurityScanner\Models
  */
 
 declare( strict_types = 1 );
 
-namespace Llar\Imunify\Models;
+namespace Llar\SecurityScanner\Models;
 
 /**
  * Mask matcher + directory walker.
