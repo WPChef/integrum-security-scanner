@@ -14,7 +14,7 @@
  * @var string|null                                 $site_key
  * @var bool                                        $has_key
  * @var string                                      $job_id
- * @var array{type: string, message: string}|null   $notice
+ * @var array{type: string, message: string, scope: string}|null    $notice
  * @var array<string, string>                       $dir_options
  * @var array{directories: string[], include: string, exclude: string} $settings
  */
@@ -47,12 +47,6 @@ if ( ! defined( 'ABSPATH' ) ) {
 			</span>
 		<?php endif; ?>
 	</header>
-
-	<?php if ( null !== $notice ) : ?>
-		<div class="notice notice-<?php echo esc_attr( $notice['type'] ); ?> is-dismissible">
-			<p><?php echo esc_html( $notice['message'] ); ?></p>
-		</div>
-	<?php endif; ?>
 
 	<div class="grid grid-cols-1 gap-5">
 
@@ -108,6 +102,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 						<?php $has_key ? esc_html_e( 'Save key', 'security-scanner' ) : esc_html_e( 'Register', 'security-scanner' ); ?>
 					</button>
 				</div>
+
+				<?php if ( null !== $notice && 'connection' === $notice['scope'] ) : ?>
+					<?php require LLAR_SECURITY_SCANNER_DIR . 'src/Views/notice.php'; ?>
+				<?php endif; ?>
 			</form>
 		</section>
 
@@ -181,6 +179,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 					</button>
 				</div>
 			</form>
+
+			<?php if ( null !== $notice && 'scan' === $notice['scope'] ) : ?>
+				<?php require LLAR_SECURITY_SCANNER_DIR . 'src/Views/notice.php'; ?>
+			<?php endif; ?>
 		</section>
 
 		<!-- Scan status (revealed by admin.js once a job is active) -->

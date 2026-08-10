@@ -166,6 +166,7 @@ final class AdminController {
 				array(
 					'type'    => 'success',
 					'message' => __( 'Site key saved.', 'security-scanner' ),
+					'scope'   => 'connection',
 				)
 			);
 			return;
@@ -174,7 +175,9 @@ final class AdminController {
 		$domain = (string) apply_filters( 'security_scanner_site_domain', '' );
 		$email  = isset( $_POST['security_scanner_email'] ) ? sanitize_email( wp_unslash( $_POST['security_scanner_email'] ) ) : '';
 
-		$this->redirect( $this->licensing->register( (string) $domain, $email ) );
+		$notice          = $this->licensing->register( (string) $domain, $email );
+		$notice['scope'] = 'connection';
+		$this->redirect( $notice );
 	}
 
 	/**
@@ -219,13 +222,14 @@ final class AdminController {
 				? __( 'The site key is missing or was rejected. Use the "Get site key" form above to obtain a new key, then start the scan again.', 'security-scanner' )
 				: ( '' !== $real_message ? $real_message : __( 'Could not start the scan. Please try again in a moment.', 'security-scanner' ) );
 
-			$this->redirect(
-				array(
-					'type'    => 'error',
-					'message' => $message,
-				)
-			);
-			return;
+		$this->redirect(
+			array(
+				'type'    => 'error',
+				'message' => $message,
+				'scope'   => 'scan',
+			)
+		);
+		return;
 		}
 
 		set_transient( 'security_scanner_active_job', $job_id, HOUR_IN_SECONDS );
@@ -239,6 +243,7 @@ final class AdminController {
 			array(
 				'type'    => 'success',
 				'message' => __( 'Scan started. Do not close this page until it completes.', 'security-scanner' ),
+				'scope'   => 'scan',
 			)
 		);
 	}
@@ -307,6 +312,8 @@ final class AdminController {
 			wp_send_json_error( array( 'message' => 'forbidden' ), 403 );
 		}
 
+		// TODO(dry): this job_id resolution block is duplicated in ajax_status();
+		// extract a private resolve_job_id() helper returning `?string`.
 		$job_id = '';
 		if ( isset( $_POST['job_id'] ) ) {
 			$job_id = sanitize_text_field( wp_unslash( $_POST['job_id'] ) );
@@ -527,16 +534,39 @@ final class AdminController {
 	}
 
 	/**
-	 * Reads and clears the transient notice.
+	 * Pops the one-shot transient notice for inline display on the plugin page.
 	 *
-	 * @return array{type: string, message: string}|null
+	 * Rendered inline in the page view (under the relevant section) rather than
+	 * via `admin_notices`: that hook fires in admin-header, before the page
+	 * callback, and would consume the transient before `render()` can read it.
+	 * The `scope` ("connection" or "scan") routes the notice to the section
+	 * that triggered it, so e.g. a scan-start error lands near the scan form,
+	 * not under the connection form.
+	 *
+	 * @return array{type: string, message: string, scope: string}|null Notice data or null when none pending.
 	 */
 	private function consume_notice(): ?array {
 		$notice = get_transient( 'security_scanner_notice' );
-		if ( is_array( $notice ) ) {
-			delete_transient( 'security_scanner_notice' );
-			return $notice;
+		if ( ! is_array( $notice ) ) {
+			return null;
 		}
-		return null;
+		delete_transient( 'security_scanner_notice' );
+
+		$allowed = array( 'success' => true, 'error' => true, 'warning' => true, 'info' => true );
+		$type    = isset( $notice['type'], $allowed[ $notice['type'] ] ) ? $notice['type'] : 'info';
+		$message = isset( $notice['message'] ) && is_string( $notice['message'] ) ? $notice['message'] : '';
+
+		if ( '' === $message ) {
+			return null;
+		}
+
+		$allowed_scopes = array( 'connection' => true, 'scan' => true );
+		$scope          = isset( $notice['scope'], $allowed_scopes[ $notice['scope'] ] ) ? $notice['scope'] : 'connection';
+
+		return array(
+			'type'    => $type,
+			'message' => $message,
+			'scope'   => $scope,
+		);
 	}
 }

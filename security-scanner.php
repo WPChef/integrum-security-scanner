@@ -61,14 +61,15 @@ add_filter(
 );
 
 if ( is_admin() ) {
-	$logger      = new \Llar\SecurityScanner\Models\WpLogger();
-	$http        = new \Llar\SecurityScanner\Models\WpHttpClient( $logger );
-	$storage     = new \Llar\SecurityScanner\Models\OptionsCredentialStorage();
-	$job_store   = new \Llar\SecurityScanner\Models\WpTransientJobStore();
-	$site_domain = (string) apply_filters( 'security_scanner_site_domain', '' );
+	$storage        = new \Llar\SecurityScanner\Models\OptionsCredentialStorage();
+	$logger         = new \Llar\SecurityScanner\Models\WpLogger( $storage );
+	$http           = new \Llar\SecurityScanner\Models\WpHttpClient( $logger );
+	$job_store      = new \Llar\SecurityScanner\Models\WpTransientJobStore();
+	$file_collector = new \Llar\SecurityScanner\Models\FileCollector();
+	$site_domain    = (string) apply_filters( 'security_scanner_site_domain', '' );
 
 	$scanner_base = (string) apply_filters( 'security_scanner_scanner_api_base', LLAR_SECURITY_SCANNER_SCANNER_API_BASE );
-	$scanner      = new \Llar\SecurityScanner\Models\ImunifyScanner( $http, $logger, $storage, $job_store, $site_domain, $scanner_base );
+	$scanner      = new \Llar\SecurityScanner\Models\ImunifyScanner( $http, $logger, $storage, $job_store, $file_collector, $site_domain, $scanner_base );
 
 	$llar_base = (string) apply_filters( 'security_scanner_llar_api_base', LLAR_SECURITY_SCANNER_LLAR_API_BASE );
 	$licensing = new \Llar\SecurityScanner\Services\LicensingService( $http, $logger, $storage, $llar_base );

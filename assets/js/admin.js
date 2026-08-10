@@ -53,13 +53,19 @@
 						if ( startBtn ) {
 							startBtn.disabled = false;
 						}
-						// Surface a brief confirmation at the top of the plugin page.
+						// Surface a brief confirmation as a standard WP admin notice: place
+						// it in #wpbody-content right before .wrap (the same area where WP
+						// renders its own admin_notices), not inside the plugin markup.
+						// Keeping it out of #security-scanner-app also leaves it untouched
+						// by the Tailwind preflight so core notice styles apply as-is.
 						const wrap = document.querySelector( '.wrap.security-scanner' );
-						if ( wrap ) {
+						if ( wrap && wrap.parentNode ) {
 							const notice = document.createElement( 'div' );
 							notice.className = 'notice notice-info is-dismissible';
-							notice.innerHTML = '<p>' + stoppedText + '</p>';
-							wrap.insertBefore( notice, wrap.firstChild );
+							const p = document.createElement( 'p' );
+							p.textContent = stoppedText;
+							notice.appendChild( p );
+							wrap.parentNode.insertBefore( notice, wrap );
 						}
 					} )
 					.catch( function () {
