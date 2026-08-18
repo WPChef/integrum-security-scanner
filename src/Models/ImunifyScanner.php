@@ -17,6 +17,7 @@ declare( strict_types = 1 );
 namespace Llar\SecurityScanner\Models;
 
 use Llar\SecurityScanner\Contracts\CredentialStorageInterface;
+use Llar\SecurityScanner\Contracts\FileCollectorInterface;
 use Llar\SecurityScanner\Contracts\HttpClientInterface;
 use Llar\SecurityScanner\Contracts\HttpException;
 use Llar\SecurityScanner\Contracts\JobStoreInterface;
@@ -109,18 +110,20 @@ final class ImunifyScanner implements \Llar\SecurityScanner\Contracts\ScannerInt
 	/**
 	 * Constructor dependencies.
 	 *
-	 * @param HttpClientInterface        $http    HTTP client.
-	 * @param LoggerInterface            $logger  Logger.
-	 * @param CredentialStorageInterface $storage Credential storage.
-	 * @param JobStoreInterface          $store   Per-job state persistence.
-	 * @param string                     $domain  Site domain.
-	 * @param string|null                $base    Override base URL (tests).
+	 * @param HttpClientInterface        $http           HTTP client.
+	 * @param LoggerInterface            $logger         Logger.
+	 * @param CredentialStorageInterface $storage        Credential storage.
+	 * @param JobStoreInterface          $store          Per-job state persistence.
+	 * @param FileCollectorInterface     $file_collector Candidate file list builder.
+	 * @param string                     $domain         Site domain.
+	 * @param string|null                $base           Override base URL (tests).
 	 */
 	public function __construct(
 		private HttpClientInterface $http,
 		private LoggerInterface $logger,
 		private CredentialStorageInterface $storage,
 		private JobStoreInterface $store,
+		private FileCollectorInterface $file_collector,
 		private string $domain,
 		?string $base = null
 	) {
@@ -135,7 +138,7 @@ final class ImunifyScanner implements \Llar\SecurityScanner\Contracts\ScannerInt
 	public function start_scan( array $directories, array $include_masks, array $exclude_masks ): string {
 		$key  = $this->require_key();
 		$root = $this->resolve_root( $directories );
-		$rels = ( new FileCollector() )->collect( $directories, $include_masks, $exclude_masks, $root );
+		$rels = $this->file_collector->collect( $directories, $include_masks, $exclude_masks, $root );
 
 		$manifest    = array();
 		$index       = 0;

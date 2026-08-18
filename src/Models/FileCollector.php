@@ -10,6 +10,8 @@ declare( strict_types = 1 );
 
 namespace Llar\SecurityScanner\Models;
 
+use Llar\SecurityScanner\Contracts\FileCollectorInterface;
+
 /**
  * Mask matcher + directory walker.
  *
@@ -20,7 +22,7 @@ namespace Llar\SecurityScanner\Models;
  *  - ?      single character
  *  - .      literal dot
  */
-final class FileCollector {
+final class FileCollector implements FileCollectorInterface {
 
 	/**
 	 * Builds the candidate list.
