@@ -152,6 +152,101 @@ export async function openPluginPage(page: Page): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// Plugin lifecycle (activation / deactivation)
+// ---------------------------------------------------------------------------
+
+/**
+ * Row selector of the plugin in the wp-admin/plugins.php table.
+ */
+const PLUGIN_ROW = 'tr[data-plugin="security-scanner/security-scanner.php"]';
+
+/**
+ * Opens wp-admin/plugins.php and waits for the plugins table to render.
+ */
+export async function openPluginsPage(page: Page): Promise<void> {
+  await page.goto('/wp-admin/plugins.php', { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('#the-list', { timeout: 15_000 });
+}
+
+/**
+ * Returns true when the plugin row currently offers a "Deactivate" action,
+ * i.e. the plugin is active.
+ */
+export async function isPluginActive(page: Page): Promise<boolean> {
+  const row = page.locator(PLUGIN_ROW);
+  return (await row.locator('a', { hasText: /^\s*Deactivate\s*$/ }).count()) > 0;
+}
+
+/**
+ * Returns true when the "File Security" entry is present in the admin menu.
+ * Must be called while on a wp-admin page.
+ */
+export async function isPluginMenuPresent(page: Page): Promise<boolean> {
+  return (await page.locator('#adminmenu a[href*="page=security-scanner"]').count()) > 0;
+}
+
+/**
+ * Activates the plugin via the plugins.php "Activate" row action.
+ *
+ * This exercises the real activation path: WordPress sandbox-scrapes
+ * security-scanner.php (an admin request), so a fatal error in the plugin
+ * bootstrap — e.g. a constructor signature mismatch — surfaces here as a
+ * failed activation with an inline error notice.
+ *
+ * @returns true when the plugin ends up active.
+ */
+export async function activatePlugin(page: Page): Promise<boolean> {
+  if (await isPluginActive(page)) {
+    return true;
+  }
+
+  const row = page.locator(PLUGIN_ROW);
+  try {
+    await row.locator('a', { hasText: /^\s*Activate\s*$/ }).first().click({ force: true });
+    await page.waitForLoadState('load', { timeout: 15_000 });
+
+    // Attached (not visible): row-action links are hover-revealed in some WP versions.
+    await row
+      .locator('a', { hasText: /^\s*Deactivate\s*$/ })
+      .first()
+      .waitFor({ state: 'attached', timeout: 10_000 });
+    return true;
+  } catch {
+    // WP renders the sandbox-scrape fatal inline on plugins.php.
+    const text = (await page.locator('body').textContent()) ?? '';
+    console.log('⚠ Plugin activation failed:', text.replace(/\s+/g, ' ').slice(0, 300));
+    return false;
+  }
+}
+
+/**
+ * Deactivates the plugin via the plugins.php "Deactivate" row action.
+ *
+ * @returns true when the plugin ends up inactive.
+ */
+export async function deactivatePlugin(page: Page): Promise<boolean> {
+  if (!(await isPluginActive(page))) {
+    return true;
+  }
+
+  const row = page.locator(PLUGIN_ROW);
+  try {
+    await row.locator('a', { hasText: /^\s*Deactivate\s*$/ }).first().click({ force: true });
+    await page.waitForLoadState('load', { timeout: 15_000 });
+
+    await row
+      .locator('a', { hasText: /^\s*Activate\s*$/ })
+      .first()
+      .waitFor({ state: 'attached', timeout: 10_000 });
+    return true;
+  } catch {
+    const text = (await page.locator('body').textContent()) ?? '';
+    console.log('⚠ Plugin deactivation failed:', text.replace(/\s+/g, ' ').slice(0, 300));
+    return false;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Key registration
 // ---------------------------------------------------------------------------
 
@@ -209,7 +304,7 @@ export async function startScan(page: Page): Promise<boolean> {
     );
     if (isVisible) return true;
   } catch {
-    const notice = page.locator('.notice-error');
+    const notice = page.locator('.security-scanner-notice.notice-error');
     if (await notice.count() > 0) {
       console.log('scan blocked:', await notice.textContent());
     }
@@ -285,6 +380,47 @@ export async function isDirectoryChecked(page: Page, slug: string): Promise<bool
 }
 
 /**
+ * Returns true when the directory checkbox for the given slug is in the
+ * indeterminate (mixed) state — a checked parent with some unchecked subtree.
+ */
+export async function isDirectoryIndeterminate(page: Page, slug: string): Promise<boolean> {
+  return page.evaluate((slug) => {
+    const input = document.querySelector(
+      `input[name="security_scanner_directories[]"][value="${slug}"]`,
+    ) as HTMLInputElement | null;
+    return input ? input.indeterminate : false;
+  }, slug);
+}
+
+/**
+ * Expands a nested directory-tree node by clicking its toggle (lazy-loads its
+ * subfolders via the dirchildren endpoint).
+ */
+export async function expandTreeNode(page: Page, rel: string): Promise<void> {
+  await page.locator(`.llar-dirtree__node[data-rel="${rel}"] > .llar-tree__toggle`).click();
+}
+
+/**
+ * Returns true when the checkbox of the tree node with the given rel path is
+ * checked (works for nodes without a legacy slug, e.g. wp-content/plugins).
+ */
+export async function isTreeNodeChecked(page: Page, rel: string): Promise<boolean> {
+  return page.locator(`.llar-dirtree__node[data-rel="${rel}"] input[type="checkbox"]`).isChecked();
+}
+
+/**
+ * Checks/unchecks the checkbox of the tree node with the given rel path.
+ */
+export async function toggleTreeNode(page: Page, rel: string, checked: boolean): Promise<void> {
+  const cb = page.locator(`.llar-dirtree__node[data-rel="${rel}"] input[type="checkbox"]`);
+  if (checked) {
+    await cb.check({ force: true });
+  } else {
+    await cb.uncheck({ force: true });
+  }
+}
+
+/**
  * Fills the site key field with a manual value (used by S18).
  */
 export async function fillSiteKeyField(page: Page, key: string): Promise<void> {
@@ -327,9 +463,12 @@ export async function waitForScanCompletion(page: Page): Promise<'completed' | '
 
 /**
  * Returns the number of files visible in the results tree.
+ *
+ * Scoped to .llar-results: the page also renders a files-to-scan preview
+ * tree that reuses the same .llar-tree__file classes.
  */
 export async function countVisibleFiles(page: Page): Promise<number> {
-  return page.locator('.llar-tree__file').count();
+  return page.locator('.llar-results .llar-tree__file').count();
 }
 
 /**
@@ -355,14 +494,14 @@ export async function toggleSuspiciousOnly(page: Page): Promise<void> {
  * Returns the text content of the admin notice.
  */
 export async function getNoticeText(page: Page): Promise<string> {
-  return (await page.locator('.notice p').textContent()) ?? '';
+  return (await page.locator('.security-scanner-notice p').textContent()) ?? '';
 }
 
 /**
  * Returns the notice class (notice-success, notice-error, etc).
  */
 export async function getNoticeType(page: Page): Promise<string> {
-  const cls = (await page.locator('.notice').first().getAttribute('class')) ?? '';
+  const cls = (await page.locator('.security-scanner-notice').first().getAttribute('class')) ?? '';
   if (cls.includes('notice-success')) return 'success';
   if (cls.includes('notice-error')) return 'error';
   return 'unknown';

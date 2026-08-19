@@ -5,10 +5,12 @@ import {
   countVisibleFiles, isSuspiciousOnlyChecked, toggleSuspiciousOnly,
   getNoticeText, getNoticeType, isScanDisabled,
   setIncludeMasks, setExcludeMasks, toggleDirectory, selectOnlyDirectories,
-  getIncludeMasks, getExcludeMasks, isDirectoryChecked,
+  getIncludeMasks, getExcludeMasks, isDirectoryChecked, isDirectoryIndeterminate,
+  expandTreeNode, isTreeNodeChecked, toggleTreeNode,
   fillSiteKeyField,
   createTestDir, enableMock, disableMock,
   getProgressLabel, parseProgressBytes, getProgressFileCount,
+  openPluginsPage, isPluginActive, activatePlugin, deactivatePlugin, isPluginMenuPresent,
 } from './helpers';
 
 test.describe('File Security Scanner E2E', () => {
@@ -313,5 +315,163 @@ test.describe('File Security Scanner E2E', () => {
     // The Start button is available again (not locked into a running scan).
     const startBtn = page.locator('button[type="submit"]').filter({ hasText: /scan/i });
     await expect(startBtn).toBeEnabled();
+  });
+
+  // =========================================================================
+  // S20 — Deactivation via UI: admin page disappears, site stays healthy
+  // =========================================================================
+  test('S20: Deactivation removes admin page and keeps site healthy', async ({ page }) => {
+    await showScenario(page, 'S20: Deactivate plugin — admin page disappears, site intact');
+
+    // Given: plugin active (the dump ships it in active_plugins).
+    await importDump(page, 'has-key');
+    await login(page);
+    await openPluginsPage(page);
+    expect(await isPluginActive(page)).toBe(true);
+
+    // When: user deactivates the plugin via the row action.
+    expect(await deactivatePlugin(page)).toBe(true);
+
+    // Then: the row offers Activate again.
+    expect(await isPluginActive(page)).toBe(false);
+
+    // And: the admin menu no longer shows the plugin entry.
+    await page.goto('/wp-admin/index.php', { waitUntil: 'domcontentloaded' });
+    expect(await isPluginMenuPresent(page)).toBe(false);
+
+    // And: the plugin URL is rejected — the menu is not registered, so
+    // wp-admin wp_die()s with 403 instead of rendering the page.
+    const resp = await page.goto('/wp-admin/admin.php?page=security-scanner');
+    expect(resp?.status()).toBe(403);
+    await expect(page.locator('body')).toContainText(/not allowed to access this page/i);
+
+    // Consistency: the site frontend still works (no leftover fatal code).
+    const home = await page.goto('/');
+    expect(home?.status()).toBe(200);
+  });
+
+  // =========================================================================
+  // S21 — Activation via UI (regression: bootstrap fatals surface here)
+  // =========================================================================
+  test('S21: Activation restores the admin page', async ({ page }) => {
+    await showScenario(page, 'S21: Activate plugin — page returns, no fatal error');
+
+    // Given: plugin deactivated (the dump ships it active, so deactivate first).
+    await importDump(page, 'has-key');
+    await login(page);
+    await openPluginsPage(page);
+    expect(await deactivatePlugin(page)).toBe(true);
+    expect(await isPluginActive(page)).toBe(false);
+
+    // When: user activates the plugin via the row action. WordPress
+    // sandbox-scrapes security-scanner.php on this exact path, so a fatal in
+    // the bootstrap (e.g. the ImunifyScanner constructor mismatch that once
+    // broke activation with "Argument #5 ($domain) must be of type string")
+    // fails this step with an inline error notice.
+    expect(await activatePlugin(page)).toBe(true);
+
+    // Then: the row is active again.
+    expect(await isPluginActive(page)).toBe(true);
+
+    // And: the admin menu shows the plugin entry.
+    await page.goto('/wp-admin/index.php', { waitUntil: 'domcontentloaded' });
+    expect(await isPluginMenuPresent(page)).toBe(true);
+
+    // And: the plugin page renders again with its heading and scan form.
+    await openPluginPage(page);
+  });
+
+  // =========================================================================
+  // S22 — Files-to-scan preview: tree on page load + default directories
+  // =========================================================================
+  test('S22: Files-to-scan preview renders before any scan', async ({ page }) => {
+    await showScenario(page, 'S22: Files-to-scan preview — tree on load, all directories checked by default');
+
+    // Given: has key, test dir available, no saved scan settings (cleanup
+    // in beforeEach removed the option, so the form shows its defaults).
+    await importDump(page, 'has-key');
+    await createTestDir(page);
+    await login(page);
+    await openPluginPage(page);
+
+    // Then: all four standard directories are checked by default.
+    expect(await isDirectoryChecked(page, 'root')).toBe(true);
+    expect(await isDirectoryChecked(page, 'wp-admin')).toBe(true);
+    expect(await isDirectoryChecked(page, 'wp-includes')).toBe(true);
+    expect(await isDirectoryChecked(page, 'wp-content')).toBe(true);
+
+    // And: the preview section is visible immediately, before any scan.
+    await expect(page.locator('.llar-preview')).toBeVisible();
+    // The default selection covers the whole install, so wait generously for
+    // the first (heaviest) render to finish: the loading hint disappears and
+    // the counter reports a file count. (Tree files themselves live inside
+    // collapsed folders, so visibility is asserted via the section, not <li>.)
+    await expect(page.locator('.llar-preview__loading')).toBeHidden({ timeout: 30_000 });
+    await expect(page.locator('.llar-preview__count')).toContainText(/files/);
+
+    // When: the user narrows the selection to the small test directory.
+    await selectOnlyDirectories(page, ['e2e-test']);
+
+    // Then: the preview refreshes (debounced) and shows exactly its 3 files.
+    await expect(page.locator('.llar-preview .llar-tree__file'))
+      .toHaveCount(3, { timeout: 15_000 });
+    await expect(page.locator('.llar-preview__count')).toHaveText(/^3 files$/);
+
+    // When: an include mask narrows the scope to a single file.
+    await setIncludeMasks(page, 'test-0.php');
+
+    // Then: the preview applies the mask exactly like a real scan would.
+    await expect(page.locator('.llar-preview .llar-tree__file'))
+      .toHaveCount(1, { timeout: 15_000 });
+  });
+
+  // =========================================================================
+  // S23 — Directory tree: nested folders with cascading checkboxes
+  // =========================================================================
+  test('S23: Directory tree cascades checkbox state', async ({ page }) => {
+    await showScenario(page, 'S23: Directory tree — nested folders, cascading checkboxes');
+
+    // Given: has key, default form state (beforeEach cleanup removed saved
+    // settings, so every node starts checked).
+    await importDump(page, 'has-key');
+    await login(page);
+    await openPluginPage(page);
+
+    // The tree renders server-side: root + first level, all checked.
+    await expect(page.locator('.llar-dirtree')).toBeVisible();
+    expect(await isDirectoryChecked(page, 'root')).toBe(true);
+    expect(await isDirectoryChecked(page, 'wp-content')).toBe(true);
+
+    // When: wp-content is expanded and its plugins subfolder is unchecked.
+    await expandTreeNode(page, 'wp-content');
+    const plugins = page.locator('.llar-dirtree__node[data-rel="wp-content/plugins"]');
+    await expect(plugins).toHaveCount(1, { timeout: 10_000 });
+    await toggleTreeNode(page, 'wp-content/plugins', false);
+
+    // Then: wp-content and root lose their checkmark (indeterminate dash —
+    // a partially selected subtree), while sibling wp-admin stays checked.
+    expect(await isDirectoryChecked(page, 'wp-content')).toBe(false);
+    expect(await isDirectoryIndeterminate(page, 'wp-content')).toBe(true);
+    expect(await isDirectoryChecked(page, 'root')).toBe(false);
+    expect(await isDirectoryIndeterminate(page, 'root')).toBe(true);
+    expect(await isDirectoryChecked(page, 'wp-admin')).toBe(true);
+    expect(await isDirectoryIndeterminate(page, 'wp-admin')).toBe(false);
+
+    // And: the unchecked subtree is posted as an explicit tree flag.
+    const offFlag = page.locator('.llar-tree-flags input[name="security_scanner_tree_off[]"]');
+    await expect(offFlag).toHaveCount(1);
+    await expect(offFlag).toHaveValue('wp-content/plugins');
+
+    // When: wp-content is checked again (re-checking a parent re-selects the
+    // whole subtree, clearing the descendant override).
+    await toggleDirectory(page, 'wp-content', true);
+
+    // Then: everything returns to checked, no flags remain.
+    expect(await isDirectoryChecked(page, 'wp-content')).toBe(true);
+    expect(await isDirectoryIndeterminate(page, 'wp-content')).toBe(false);
+    expect(await isDirectoryChecked(page, 'root')).toBe(true);
+    expect(await isDirectoryIndeterminate(page, 'root')).toBe(false);
+    expect(await isTreeNodeChecked(page, 'wp-content/plugins')).toBe(true);
+    await expect(page.locator('.llar-tree-flags input')).toHaveCount(0);
   });
 });
