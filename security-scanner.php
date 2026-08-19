@@ -22,7 +22,10 @@ define( 'LLAR_SECURITY_SCANNER_DIR', plugin_dir_path( __FILE__ ) );
 define( 'LLAR_SECURITY_SCANNER_URL', plugin_dir_url( __FILE__ ) );
 
 /**
- * External API base URLs.
+ * External API URLs — used as-is, no path is appended.
+ *
+ * LLAR_API_BASE is the full registration endpoint URL; SCANNER_API_BASE is a
+ * bare host (the scanner appends /api/v1/... itself).
  *
  * Override precedence (last wins):
  *   1. Hardcoded default (the value below).
@@ -30,7 +33,7 @@ define( 'LLAR_SECURITY_SCANNER_URL', plugin_dir_url( __FILE__ ) );
  *   3. Runtime filter `security_scanner_<name>_api_base` (added via add_filter
  *      in a theme / mu-plugin / helper plugin).
  */
-defined( 'LLAR_SECURITY_SCANNER_LLAR_API_BASE' ) || define( 'LLAR_SECURITY_SCANNER_LLAR_API_BASE', 'https://api.limitloginattempts.com' );
+defined( 'LLAR_SECURITY_SCANNER_LLAR_API_BASE' ) || define( 'LLAR_SECURITY_SCANNER_LLAR_API_BASE', 'https://api.limitloginattempts.com/imunify/site' );
 defined( 'LLAR_SECURITY_SCANNER_SCANNER_API_BASE' ) || define( 'LLAR_SECURITY_SCANNER_SCANNER_API_BASE', 'https://connect.imunify.com' );
 
 define( 'LLAR_SECURITY_SCANNER_OPTION_KEY', 'security_scanner_credentials' );
