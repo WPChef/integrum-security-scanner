@@ -10,6 +10,7 @@ declare( strict_types = 1 );
 namespace Llar\SecurityScanner\Controllers;
 
 use Llar\SecurityScanner\Contracts\CredentialStorageInterface;
+use Llar\SecurityScanner\Contracts\FileCollectorInterface;
 use Llar\SecurityScanner\Contracts\LoggerInterface;
 use Llar\SecurityScanner\Contracts\ScanException;
 use Llar\SecurityScanner\Contracts\ScannerInterface;
@@ -30,18 +31,27 @@ final class AdminController {
 	private const OPTION_SETTINGS = 'security_scanner_scan_settings';
 
 	/**
+	 * Directory slugs checked by default (before anything is saved).
+	 *
+	 * @var string[]
+	 */
+	private const DEFAULT_DIRECTORIES = array( 'root', 'wp-admin', 'wp-includes', 'wp-content' );
+
+	/**
 	 * Constructor.
 	 *
 	 * @param ScannerInterface           $scanner  Scanner.
 	 * @param CredentialStorageInterface $storage  Storage.
 	 * @param LicensingService           $licensing Licensing service.
 	 * @param LoggerInterface            $logger   Logger.
+	 * @param FileCollectorInterface     $file_collector Candidate file list builder (scan preview).
 	 */
 	public function __construct(
 		private ScannerInterface $scanner,
 		private CredentialStorageInterface $storage,
 		private LicensingService $licensing,
-		private LoggerInterface $logger
+		private LoggerInterface $logger,
+		private FileCollectorInterface $file_collector
 	) {
 	}
 
@@ -56,6 +66,8 @@ final class AdminController {
 		add_action( 'wp_ajax_security_scanner_status', array( $this, 'ajax_status' ) );
 		add_action( 'wp_ajax_security_scanner_stop', array( $this, 'ajax_stop' ) );
 		add_action( 'wp_ajax_security_scanner_results', array( $this, 'ajax_results' ) );
+		add_action( 'wp_ajax_security_scanner_preview', array( $this, 'ajax_preview' ) );
+		add_action( 'wp_ajax_security_scanner_dirchildren', array( $this, 'ajax_dirchildren' ) );
 	}
 
 	/**
@@ -86,19 +98,24 @@ final class AdminController {
 		// Pre-built Tailwind stylesheet: utilities are scoped under
 		// #security-scanner-app and preflight is disabled so the WP admin
 		// chrome is never affected. Rebuild with:
-		//   node node_modules/tailwindcss/lib/cli.js -i tailwind-src.css -o wp-content/plugins/security-scanner/assets/css/tailwind.build.css --minify
+		// node node_modules/tailwindcss/lib/cli.js -i tailwind-src.css -o wp-content/plugins/security-scanner/assets/css/tailwind.build.css --minify
+		// Asset versions use filemtime so every code change busts the browser
+		// cache (a stale admin.js otherwise leaves the file tree empty).
+		$css_ver = (string) filemtime( LLAR_SECURITY_SCANNER_DIR . 'assets/css/tailwind.build.css' );
+		$js_ver  = (string) filemtime( LLAR_SECURITY_SCANNER_DIR . 'assets/js/admin.js' );
+
 		wp_enqueue_style(
 			'security-scanner-admin',
 			LLAR_SECURITY_SCANNER_URL . 'assets/css/tailwind.build.css',
 			array(),
-			LLAR_SECURITY_SCANNER_VERSION
+			$css_ver
 		);
 
 		wp_enqueue_script(
 			'security-scanner-admin',
 			LLAR_SECURITY_SCANNER_URL . 'assets/js/admin.js',
 			array(),
-			LLAR_SECURITY_SCANNER_VERSION,
+			$js_ver,
 			true
 		);
 
@@ -115,6 +132,8 @@ final class AdminController {
 					'register' => __( 'Register', 'security-scanner' ),
 					'stopped'  => __( 'Scan stopped.', 'security-scanner' ),
 					'stopping' => __( 'Stopping…', 'security-scanner' ),
+					'file'     => __( 'file', 'security-scanner' ),
+					'files'    => __( 'files', 'security-scanner' ),
 				),
 			)
 		);
@@ -191,18 +210,37 @@ final class AdminController {
 		$dir_slugs     = $this->sanitize_directory_slugs( $_POST['security_scanner_directories'] ?? array(), $allowed ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized, WordPress.Security.ValidatedSanitizedInput.MissingUnslash -- sanitised inside sanitize_directory_slugs().
 		$include_masks = $this->parse_masks( $_POST['security_scanner_include'] ?? '' ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized, WordPress.Security.ValidatedSanitizedInput.MissingUnslash -- sanitised inside parse_masks().
 		$exclude_masks = $this->parse_masks( $_POST['security_scanner_exclude'] ?? '' ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized, WordPress.Security.ValidatedSanitizedInput.MissingUnslash -- sanitised inside parse_masks().
+		$tree_flags    = $this->tree_flags_from_post();
 
 		// Persist the user's selections so the form keeps its state across reloads
 		// (even when the scan fails, e.g. quota exceeded — the user can retry).
 		$this->store_scan_settings(
 			$dir_slugs,
 			isset( $_POST['security_scanner_include'] ) ? sanitize_text_field( wp_unslash( $_POST['security_scanner_include'] ) ) : '', // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.MissingUnslash -- unslashed above.
-			isset( $_POST['security_scanner_exclude'] ) ? sanitize_text_field( wp_unslash( $_POST['security_scanner_exclude'] ) ) : '' // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.MissingUnslash -- unslashed above.
+			isset( $_POST['security_scanner_exclude'] ) ? sanitize_text_field( wp_unslash( $_POST['security_scanner_exclude'] ) ) : '', // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.MissingUnslash -- unslashed above.
+			$tree_flags
 		);
 
-		$directories = $this->slugs_to_paths( $dir_slugs, $allowed );
-		if ( array() === $directories ) {
-			$directories = array( untrailingslashit( ABSPATH ) );
+		// Explicit tree flags are authoritative; the flat directory slugs are
+		// the legacy/no-JS path.
+		if ( array() !== $tree_flags ) {
+			$scope         = $this->scope_from_flags( $tree_flags, $include_masks, $exclude_masks );
+			$directories   = $scope[0];
+			$include_masks = $scope[1];
+			$exclude_masks = $scope[2];
+
+			if ( array() === $directories ) {
+				$this->redirect(
+					array(
+						'type'    => 'error',
+						'message' => __( 'Select at least one directory to scan.', 'security-scanner' ),
+						'scope'   => 'scan',
+					)
+				);
+				return;
+			}
+		} else {
+			$directories = $this->resolve_scan_directories( $dir_slugs, $allowed );
 		}
 
 		try {
@@ -222,14 +260,14 @@ final class AdminController {
 				? __( 'The site key is missing or was rejected. Use the "Get site key" form above to obtain a new key, then start the scan again.', 'security-scanner' )
 				: ( '' !== $real_message ? $real_message : __( 'Could not start the scan. Please try again in a moment.', 'security-scanner' ) );
 
-		$this->redirect(
-			array(
-				'type'    => 'error',
-				'message' => $message,
-				'scope'   => 'scan',
-			)
-		);
-		return;
+			$this->redirect(
+				array(
+					'type'    => 'error',
+					'message' => $message,
+					'scope'   => 'scan',
+				)
+			);
+			return;
 		}
 
 		set_transient( 'security_scanner_active_job', $job_id, HOUR_IN_SECONDS );
@@ -335,6 +373,63 @@ final class AdminController {
 	}
 
 	/**
+	 * AJAX: returns the child directories of a tree node (lazy loading).
+	 */
+	public function ajax_dirchildren(): void {
+		check_ajax_referer( self::NONCE_POLL, 'nonce' );
+
+		if ( ! current_user_can( self::CAPABILITY ) ) {
+			wp_send_json_error( array( 'message' => 'forbidden' ), 403 );
+		}
+
+		$rel = isset( $_POST['rel'] ) ? sanitize_text_field( wp_unslash( $_POST['rel'] ) ) : '';
+		if ( null === $this->validate_rel_dir( $rel ) ) {
+			wp_send_json_error( array( 'message' => 'invalid dir' ) );
+		}
+
+		wp_send_json_success( array( 'children' => $this->dir_children_data( $rel ) ) );
+	}
+
+	/**
+	 * AJAX: returns the file tree preview for the current scan form selections.
+	 *
+	 * Uses the same FileCollector + mask semantics as a real scan, so the tree
+	 * shows exactly what would be scanned before the user starts a job. When
+	 * explicit directory-tree flags are posted they are authoritative; the
+	 * plain directory slugs are the legacy/no-JS fallback.
+	 */
+	public function ajax_preview(): void {
+		check_ajax_referer( self::NONCE_POLL, 'nonce' );
+
+		if ( ! current_user_can( self::CAPABILITY ) ) {
+			wp_send_json_error( array( 'message' => 'forbidden' ), 403 );
+		}
+
+		$allowed = $this->directory_options();
+		$include = $this->parse_masks( $_POST['security_scanner_include'] ?? '' ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized, WordPress.Security.ValidatedSanitizedInput.MissingUnslash -- sanitised inside parse_masks().
+		$exclude = $this->parse_masks( $_POST['security_scanner_exclude'] ?? '' ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized, WordPress.Security.ValidatedSanitizedInput.MissingUnslash -- sanitised inside parse_masks().
+		$flags   = $this->tree_flags_from_post();
+
+		if ( array() !== $flags ) {
+			$scope       = $this->scope_from_flags( $flags, $include, $exclude );
+			$directories = $scope[0];
+			$exclude     = $scope[2];
+		} else {
+			$dir_slugs   = $this->sanitize_directory_slugs( $_POST['security_scanner_directories'] ?? array(), $allowed ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized, WordPress.Security.ValidatedSanitizedInput.MissingUnslash -- sanitised inside sanitize_directory_slugs().
+			$directories = $this->resolve_scan_directories( $dir_slugs, $allowed );
+		}
+
+		$files = $this->file_collector->collect( $directories, $include, $exclude, untrailingslashit( ABSPATH ) );
+
+		wp_send_json_success(
+			array(
+				'files' => $files,
+				'total' => count( $files ),
+			)
+		);
+	}
+
+	/**
 	 * Renders the admin page.
 	 */
 	public function render(): void {
@@ -342,9 +437,9 @@ final class AdminController {
 			return;
 		}
 
-		$site_id     = $this->storage->get_site_id();
-		$site_key    = $this->storage->get_site_key();
-		$has_key     = null !== $site_key && '' !== $site_key;
+		$site_id  = $this->storage->get_site_id();
+		$site_key = $this->storage->get_site_key();
+		$has_key  = null !== $site_key && '' !== $site_key;
 		// The job id shown to the UI comes ONLY from the one-shot started_job
 		// transient, so reloading the page (or opening it fresh) does not pick
 		// up a previously started scan and resume polling. The scan keeps running
@@ -354,6 +449,16 @@ final class AdminController {
 		$notice      = $this->consume_notice();
 		$dir_options = $this->directory_options();
 		$settings    = $this->load_scan_settings();
+
+		// Directory tree: root node + first level rendered server-side so the
+		// top-level checkboxes exist without JS; deeper levels load lazily.
+		$tree_flags = $settings['tree'];
+		$tree_rows  = $this->dir_children_data( '' );
+		foreach ( $tree_rows as &$row ) {
+			$row['checked'] = ! $this->tree_eff_off( $row['rel'], $tree_flags );
+		}
+		unset( $row );
+		$tree_root_on = ! $this->tree_eff_off( '', $tree_flags );
 
 		require LLAR_SECURITY_SCANNER_DIR . 'src/Views/page.php';
 	}
@@ -382,6 +487,23 @@ final class AdminController {
 	}
 
 	/**
+	 * Maps validated slugs to paths, falling back to the WP root when the
+	 * selection is empty (same rule for a real scan and for the preview).
+	 *
+	 * @param string[]             $slugs   Directory slugs.
+	 * @param array<string,string> $allowed Valid slug => path map.
+	 * @return string[] Absolute paths.
+	 */
+	private function resolve_scan_directories( array $slugs, array $allowed ): array {
+		$directories = $this->slugs_to_paths( $slugs, $allowed );
+		if ( array() === $directories ) {
+			$directories = array( untrailingslashit( ABSPATH ) );
+		}
+
+		return $directories;
+	}
+
+	/**
 	 * Maps validated directory slugs back to absolute paths.
 	 *
 	 * @param string[]             $slugs   Directory slugs.
@@ -402,17 +524,19 @@ final class AdminController {
 	/**
 	 * Persists the scan form selections so they survive page reloads.
 	 *
-	 * @param string[] $dir_slugs     Selected directory slugs.
-	 * @param string   $include_masks Include masks raw string.
-	 * @param string   $exclude_masks Exclude masks raw string.
+	 * @param string[]           $dir_slugs     Selected directory slugs.
+	 * @param string             $include_masks Include masks raw string.
+	 * @param string             $exclude_masks Exclude masks raw string.
+	 * @param array<string,bool> $tree_flags Explicit directory-tree toggles (rel path => checked).
 	 */
-	private function store_scan_settings( array $dir_slugs, string $include_masks, string $exclude_masks ): void {
+	private function store_scan_settings( array $dir_slugs, string $include_masks, string $exclude_masks, array $tree_flags ): void {
 		update_option(
 			self::OPTION_SETTINGS,
 			array(
 				'directories' => array_values( $dir_slugs ),
 				'include'     => $include_masks,
 				'exclude'     => $exclude_masks,
+				'tree'        => $tree_flags,
 			),
 			false
 		);
@@ -421,25 +545,37 @@ final class AdminController {
 	/**
 	 * Loads the persisted scan form selections, with sane defaults.
 	 *
-	 * @return array{directories: string[], include: string, exclude: string}
+	 * @return array{directories: string[], include: string, exclude: string, tree: array<string,bool>}
 	 */
 	private function load_scan_settings(): array {
 		$saved = get_option( self::OPTION_SETTINGS );
 
 		if ( ! is_array( $saved ) ) {
 			return array(
-				'directories' => array( 'root' ),
+				'directories' => self::DEFAULT_DIRECTORIES,
 				'include'     => '',
 				'exclude'     => '',
+				'tree'        => array(),
 			);
 		}
 
-		$dirs = is_array( $saved['directories'] ?? null ) ? array_map( 'strval', $saved['directories'] ) : array( 'root' );
+		$dirs = is_array( $saved['directories'] ?? null ) ? array_map( 'strval', $saved['directories'] ) : self::DEFAULT_DIRECTORIES;
+
+		$tree = array();
+		if ( is_array( $saved['tree'] ?? null ) ) {
+			foreach ( $saved['tree'] as $rel => $on ) {
+				$rel = is_string( $rel ) ? trim( str_replace( '\\', '/', $rel ), '/' ) : '';
+				if ( '' === $rel || null !== $this->validate_rel_dir( $rel ) ) {
+					$tree[ $rel ] = (bool) $on;
+				}
+			}
+		}
 
 		return array(
-			'directories' => array() === $dirs ? array( 'root' ) : array_values( $dirs ),
+			'directories' => array() === $dirs ? self::DEFAULT_DIRECTORIES : array_values( $dirs ),
 			'include'     => is_string( $saved['include'] ?? null ) ? (string) $saved['include'] : '',
 			'exclude'     => is_string( $saved['exclude'] ?? null ) ? (string) $saved['exclude'] : '',
+			'tree'        => $tree,
 		);
 	}
 
@@ -477,6 +613,236 @@ final class AdminController {
 		}
 
 		return $out;
+	}
+
+	/**
+	 * Validates a tree-node relative path and returns its absolute path.
+	 *
+	 * The path must resolve inside ABSPATH (realpath containment) and be a
+	 * directory; '' maps to ABSPATH itself. Returns null for anything else.
+	 *
+	 * @param string $rel Relative path ('' = site root).
+	 * @return string|null Absolute path, or null when invalid.
+	 */
+	private function validate_rel_dir( string $rel ): ?string {
+		$root = realpath( untrailingslashit( ABSPATH ) );
+		if ( false === $root || ! is_string( $root ) ) {
+			$root = untrailingslashit( ABSPATH );
+		}
+
+		$rel = trim( str_replace( '\\', '/', $rel ), '/' );
+		if ( '' === $rel ) {
+			return $root;
+		}
+
+		$parts = array_filter( explode( '/', $rel ), 'strlen' );
+		foreach ( $parts as $part ) {
+			if ( '.' === $part || '..' === $part ) {
+				return null;
+			}
+		}
+
+		$real = realpath( $root . '/' . implode( '/', $parts ) );
+		if ( false === $real || ! is_string( $real ) ) {
+			return null;
+		}
+
+		if ( $real !== $root && 0 !== strpos( $real, $root . DIRECTORY_SEPARATOR ) ) {
+			return null;
+		}
+
+		return is_dir( $real ) ? $real : null;
+	}
+
+	/**
+	 * Lists the child directories of a tree node for the selector UI.
+	 *
+	 * @param string $rel Relative parent path ('' = site root).
+	 * @return array<int, array{rel: string, name: string, slug: string, has_children: bool}>
+	 */
+	private function dir_children_data( string $rel ): array {
+		$abs = $this->validate_rel_dir( $rel );
+		if ( null === $abs ) {
+			return array();
+		}
+
+		$options = $this->directory_options();
+		$rows    = array();
+
+		foreach ( (array) glob( $abs . '/*', GLOB_ONLYDIR ) as $path ) {
+			$slug = array_search( $path, $options, true );
+
+			$rows[] = array(
+				'rel'          => '' === $rel ? basename( $path ) : $rel . '/' . basename( $path ),
+				'name'         => basename( $path ),
+				'slug'         => false !== $slug ? (string) $slug : '',
+				'has_children' => array() !== glob( $path . '/*', GLOB_ONLYDIR ),
+			);
+		}
+
+		usort( $rows, static fn( array $a, array $b ): int => strcasecmp( $a['name'], $b['name'] ) );
+
+		return $rows;
+	}
+
+	/**
+	 * Reads the explicit directory-tree toggles from the POSTed form.
+	 *
+	 * @return array<string,bool> Map of validated rel path => checked.
+	 */
+	private function tree_flags_from_post(): array {
+		$flags = array();
+
+		foreach ( array(
+			'on'  => true,
+			'off' => false,
+		) as $key => $value ) {
+			$raw = isset( $_POST[ 'security_scanner_tree_' . $key ] ) ? $_POST[ 'security_scanner_tree_' . $key ] : array(); // phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized, WordPress.Security.ValidatedSanitizedInput.MissingUnslash -- nonce verified by the caller; value sanitised/validated below.
+			if ( ! is_array( $raw ) ) {
+				continue;
+			}
+
+			foreach ( $raw as $rel ) {
+				$rel  = sanitize_text_field( wp_unslash( $rel ) );
+				$norm = trim( str_replace( '\\', '/', $rel ), '/' );
+
+				if ( '' === $norm ) {
+					$flags[''] = $value;
+					continue;
+				}
+
+				if ( null !== $this->validate_rel_dir( $norm ) ) {
+					$flags[ $norm ] = $value;
+				}
+			}
+		}
+
+		return $flags;
+	}
+
+	/**
+	 * Effective checked state of a node: the nearest explicit flag wins
+	 * (self first, then ancestors); default is checked.
+	 */
+	private function tree_eff_off( string $rel, array $flags ): bool {
+		$segs = array_filter( explode( '/', trim( $rel, '/' ) ), 'strlen' );
+
+		for ( $i = count( $segs ); $i >= 0; $i-- ) {
+			$prefix = implode( '/', array_slice( $segs, 0, $i ) );
+			if ( array_key_exists( $prefix, $flags ) ) {
+					return false === $flags[ $prefix ];
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * Computes the scan scope (directories + derived exclude masks) from the
+	 * explicit tree toggles.
+	 *
+	 * Model: a checked folder means "scan this whole subtree"; an unchecked
+	 * folder inside a scanned subtree is expressed as an exclude mask. When the
+	 * site root itself is off, only explicitly re-checked subtrees are scanned.
+	 *
+	 * @param array<string,bool> $flags         Explicit toggles.
+	 * @param string[]           $include_masks Include masks.
+	 * @param string[]           $exclude_masks Exclude masks.
+	 * @return array{0: string[], 1: string[], 2: string[]} [directories, include, exclude]
+	 */
+	private function scope_from_flags( array $flags, array $include_masks, array $exclude_masks ): array {
+		$dirs  = array();
+		$extra = array();
+		$this->scope_walk( '', $flags, $dirs, $extra );
+
+		return array(
+			array_values( array_unique( $dirs ) ),
+			$include_masks,
+			array_values( array_unique( array_merge( $exclude_masks, $extra ) ) ),
+		);
+	}
+
+	/**
+	 * Recursive worker for scope_from_flags().
+	 */
+	private function scope_walk( string $rel, array $flags, array &$dirs, array &$extra ): void {
+		$abs = $this->validate_rel_dir( $rel );
+		if ( null === $abs ) {
+			return;
+		}
+
+		if ( ! $this->tree_eff_off( $rel, $flags ) ) {
+			// Node effectively ON: scan it wholesale, minus maximal OFF flags below.
+			$dirs[] = $abs;
+			foreach ( $this->maximal_false_below( $rel, $flags ) as $off ) {
+				$extra[] = $off . '/**';
+			}
+			return;
+		}
+
+		// Node OFF: descend only along branches that contain explicit ON flags.
+		foreach ( (array) glob( $abs . '/*', GLOB_ONLYDIR ) as $child ) {
+			$child_rel = '' === $rel ? basename( $child ) : $rel . '/' . basename( $child );
+			if ( $this->tree_eff_off( $child_rel, $flags ) && ! $this->has_true_below( $child_rel, $flags ) ) {
+				continue;
+			}
+			$this->scope_walk( $child_rel, $flags, $dirs, $extra );
+		}
+	}
+
+	/**
+	 * Returns the unchecked flags strictly below $rel that are not already
+	 * covered by a closer unchecked ancestor (maximal ones).
+	 *
+	 * @return string[]
+	 */
+	private function maximal_false_below( string $rel, array $flags ): array {
+		$out = array();
+
+		foreach ( $flags as $key => $on ) {
+			if ( true === $on || ! $this->is_strictly_below( $key, $rel ) ) {
+				continue;
+			}
+
+			$covered = false;
+			foreach ( $flags as $anc => $anc_on ) {
+				if ( true === $anc_on || $anc === $key || ! $this->is_strictly_below( $anc, $rel ) ) {
+					continue;
+				}
+				if ( 0 === strpos( $key, $anc . '/' ) ) {
+					$covered = true;
+					break;
+				}
+			}
+
+			if ( ! $covered ) {
+				$out[] = $key;
+			}
+		}
+
+		return $out;
+	}
+
+	/**
+	 * True when any explicitly-checked flag exists strictly below $rel.
+	 */
+	private function has_true_below( string $rel, array $flags ): bool {
+		foreach ( $flags as $key => $on ) {
+			if ( true === $on && $this->is_strictly_below( $key, $rel ) ) {
+					return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * True when $key is a strict descendant of $rel ('' = site root).
+	 */
+	private function is_strictly_below( string $key, string $rel ): bool {
+		if ( '' === $rel ) {
+			return '' !== $key;
+		}
+		return 0 === strpos( $key, $rel . '/' );
 	}
 
 	/**
@@ -552,7 +918,12 @@ final class AdminController {
 		}
 		delete_transient( 'security_scanner_notice' );
 
-		$allowed = array( 'success' => true, 'error' => true, 'warning' => true, 'info' => true );
+		$allowed = array(
+			'success' => true,
+			'error'   => true,
+			'warning' => true,
+			'info'    => true,
+		);
 		$type    = isset( $notice['type'], $allowed[ $notice['type'] ] ) ? $notice['type'] : 'info';
 		$message = isset( $notice['message'] ) && is_string( $notice['message'] ) ? $notice['message'] : '';
 
@@ -560,7 +931,10 @@ final class AdminController {
 			return null;
 		}
 
-		$allowed_scopes = array( 'connection' => true, 'scan' => true );
+		$allowed_scopes = array(
+			'connection' => true,
+			'scan'       => true,
+		);
 		$scope          = isset( $notice['scope'], $allowed_scopes[ $notice['scope'] ] ) ? $notice['scope'] : 'connection';
 
 		return array(

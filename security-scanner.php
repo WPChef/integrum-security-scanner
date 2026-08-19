@@ -77,6 +77,6 @@ if ( is_admin() ) {
 	$llar_base = (string) apply_filters( 'security_scanner_llar_api_base', LLAR_SECURITY_SCANNER_LLAR_API_BASE );
 	$licensing = new \Llar\SecurityScanner\Services\LicensingService( $http, $logger, $storage, $llar_base );
 
-	$admin = new \Llar\SecurityScanner\Controllers\AdminController( $scanner, $storage, $licensing, $logger );
+	$admin = new \Llar\SecurityScanner\Controllers\AdminController( $scanner, $storage, $licensing, $logger, $file_collector );
 	$admin->register();
 }

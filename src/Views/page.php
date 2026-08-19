@@ -16,7 +16,10 @@
  * @var string                                      $job_id
  * @var array{type: string, message: string, scope: string}|null    $notice
  * @var array<string, string>                       $dir_options
- * @var array{directories: string[], include: string, exclude: string} $settings
+ * @var array{directories: string[], include: string, exclude: string, tree: array<string,bool>} $settings
+ * @var array<string,bool>                          $tree_flags
+ * @var array<int, array{rel: string, name: string, slug: string, has_children: bool, checked: bool}> $tree_rows
+ * @var bool                                        $tree_root_on
  */
 
 declare( strict_types = 1 );
@@ -119,19 +122,53 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 				<div>
 					<span class="mb-2 block text-sm font-medium text-slate-700"><?php esc_html_e( 'Directories', 'security-scanner' ); ?></span>
-					<div class="grid grid-cols-2 gap-2 sm:grid-cols-3">
-						<?php foreach ( $dir_options as $slug => $abs ) : ?>
-							<label class="inline-flex cursor-pointer items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 transition hover:bg-slate-100">
-								<input
-									type="checkbox"
-									name="security_scanner_directories[]"
-									value="<?php echo esc_attr( $slug ); ?>"
-									class="rounded border-slate-300 text-primary-600 focus:ring-primary-500"
-									<?php checked( in_array( $slug, $settings['directories'], true ) ); ?>
-								/>
-								<?php echo esc_html( $slug ); ?>
-							</label>
-						<?php endforeach; ?>
+					<p class="!m-0 !mb-2 text-xs text-slate-500"><?php esc_html_e( 'Checking a folder selects all its subfolders; unchecking a subfolder clears its parent.', 'security-scanner' ); ?></p>
+					<div
+						class="llar-tree llar-dirtree rounded-md border border-slate-200 bg-slate-50"
+						data-flags="<?php echo esc_attr( wp_json_encode( $tree_flags ) ); ?>"
+					>
+						<ul class="llar-tree__list is-root">
+							<li class="llar-tree__folder llar-dirtree__node" data-rel="">
+								<span class="llar-tree__toggle">▾</span>
+								<label class="llar-dirtree__label inline-flex cursor-pointer items-center gap-2">
+									<input
+										type="checkbox"
+										name="security_scanner_directories[]"
+										value="root"
+										class="rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+										<?php checked( $tree_root_on ); ?>
+									/>
+									<span class="llar-tree__folder-name">/</span>
+								</label>
+								<ul class="llar-tree__list" data-loaded="1">
+									<?php foreach ( $tree_rows as $row ) : ?>
+										<li class="llar-tree__folder llar-dirtree__node" data-rel="<?php echo esc_attr( $row['rel'] ); ?>">
+											<span class="llar-tree__toggle"><?php echo $row['has_children'] ? '▸' : ' '; ?></span>
+											<label class="llar-dirtree__label inline-flex cursor-pointer items-center gap-2">
+												<?php if ( '' !== $row['slug'] ) : ?>
+													<input
+														type="checkbox"
+														name="security_scanner_directories[]"
+														value="<?php echo esc_attr( $row['slug'] ); ?>"
+														class="rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+														<?php checked( $row['checked'] ); ?>
+													/>
+												<?php else : ?>
+													<input
+														type="checkbox"
+														class="rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+														<?php checked( $row['checked'] ); ?>
+													/>
+												<?php endif; ?>
+												<span class="llar-tree__folder-name"><?php echo esc_html( $row['name'] ); ?>/</span>
+											</label>
+											<ul class="llar-tree__list" hidden></ul>
+										</li>
+									<?php endforeach; ?>
+								</ul>
+							</li>
+						</ul>
+						<div class="llar-tree-flags" hidden></div>
 					</div>
 				</div>
 
@@ -183,6 +220,17 @@ if ( ! defined( 'ABSPATH' ) ) {
 			<?php if ( null !== $notice && 'scan' === $notice['scope'] ) : ?>
 				<?php require LLAR_SECURITY_SCANNER_DIR . 'src/Views/notice.php'; ?>
 			<?php endif; ?>
+		</section>
+
+		<!-- File tree preview: what the current form selections would scan -->
+		<section class="llar-preview rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+			<div class="mb-3 flex items-center justify-between">
+				<h2 class="!m-0 !text-lg !font-semibold !text-slate-800"><?php esc_html_e( 'Files to scan', 'security-scanner' ); ?></h2>
+				<span class="llar-preview__count text-xs text-slate-500"></span>
+			</div>
+			<ul class="llar-tree llar-preview__tree"></ul>
+			<p class="llar-preview__loading text-sm text-slate-500"><?php esc_html_e( 'Loading…', 'security-scanner' ); ?></p>
+			<p class="llar-preview__empty text-sm text-slate-500" hidden><?php esc_html_e( 'No files match the current settings.', 'security-scanner' ); ?></p>
 		</section>
 
 		<!-- Scan status (revealed by admin.js once a job is active) -->
