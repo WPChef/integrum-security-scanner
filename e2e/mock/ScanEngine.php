@@ -56,7 +56,7 @@ final class ScanEngine {
 			throw new \RuntimeException( 'No files' );
 		}
 
-		$job_id    = uniqid( 'job-', false );
+		$job_id    = 'job-' . bin2hex( random_bytes( 16 ) );
 		$job_files = array();
 		foreach ( $files as $f ) {
 			$idx     = (int) ( $f['file_index'] ?? -1 );

@@ -50,6 +50,11 @@ final class Router {
 			$this->handle_register();
 		}
 
+		// POST /imunify/inject-key (e2e only — seeds dump credentials into mock state)
+		if ( 'POST' === $method && '/imunify/inject-key' === $path ) {
+			$this->handle_inject_key();
+		}
+
 		// POST /api/v1/scan/start
 		if ( 'POST' === $method && '/api/v1/scan/start' === $path ) {
 			$this->handle_start_scan();
@@ -106,7 +111,22 @@ final class Router {
 		}
 	}
 
+	private function handle_inject_key(): void {
+		$body = $this->read_body();
+		try {
+			$this->registrar->inject(
+				(string) ( $body['domain'] ?? '' ),
+				(string) ( $body['site_id'] ?? '' ),
+				(string) ( $body['site_key'] ?? '' ),
+			);
+			JsonResponse::ok( array( 'injected' => true ) );
+		} catch ( \RuntimeException $e ) {
+			JsonResponse::error( 400, $e->getMessage() );
+		}
+	}
+
 	private function handle_start_scan(): void {
+		$this->require_site_key();
 		$body  = $this->read_body();
 		$files = is_array( $body['files'] ?? null ) ? $body['files'] : array();
 
@@ -122,6 +142,7 @@ final class Router {
 	 * @param string $job_id Job id.
 	 */
 	private function handle_hashes( string $job_id ): void {
+		$this->require_site_key();
 		$body   = $this->read_body();
 		$hashes = is_array( $body['hashes'] ?? null ) ? $body['hashes'] : array();
 
@@ -137,6 +158,7 @@ final class Router {
 	 * @param string $job_id Job id.
 	 */
 	private function handle_upload( string $job_id ): void {
+		$this->require_site_key();
 		$file_id = $_POST['file_id'] ?? '';
 		if ( '' === $file_id ) {
 			JsonResponse::error( 400, 'Missing file_id' );
@@ -154,6 +176,7 @@ final class Router {
 	 * @param string $job_id Job id.
 	 */
 	private function handle_poll( string $job_id ): void {
+		$this->require_site_key();
 		try {
 			$result = $this->engine->poll( $job_id );
 			JsonResponse::ok( $result );
@@ -206,5 +229,18 @@ final class Router {
 		$data = json_decode( $raw, true );
 
 		return is_array( $data ) ? $data : array();
+	}
+
+	/**
+	 * Rejects requests without a registered X-Site-Key.
+	 */
+	private function require_site_key(): void {
+		$key = '';
+		if ( isset( $_SERVER['HTTP_X_SITE_KEY'] ) && is_string( $_SERVER['HTTP_X_SITE_KEY'] ) ) {
+			$key = $_SERVER['HTTP_X_SITE_KEY'];
+		}
+		if ( ! $this->registrar->is_valid_key( $key ) ) {
+			JsonResponse::error( 401, 'Invalid site key' );
+		}
 	}
 }

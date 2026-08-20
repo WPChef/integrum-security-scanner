@@ -13,12 +13,27 @@ declare( strict_types = 1 );
 
 namespace Llar\SecurityScanner\Models;
 
+use Llar\SecurityScanner\Contracts\CredentialStorageInterface;
 use Llar\SecurityScanner\Contracts\LoggerInterface;
 
 /**
- * Thin adapter over error_log().
+ * Thin adapter over error_log() with credential redaction.
  */
 final class WpLogger implements LoggerInterface {
+
+	/**
+	 * Redactor for log context.
+	 */
+	private CredentialRedactor $redactor;
+
+	/**
+	 * Constructor.
+	 *
+	 * @param CredentialStorageInterface|null $storage Optional credentials for value masking.
+	 */
+	public function __construct( ?CredentialStorageInterface $storage = null ) {
+		$this->redactor = new CredentialRedactor( $storage );
+	}
 
 	/**
 	 * {@inheritdoc}
@@ -42,7 +57,8 @@ final class WpLogger implements LoggerInterface {
 	 * @param array<string, mixed> $context Context.
 	 */
 	private function log( string $level, string $message, array $context ): void {
-		$line = '[' . gmdate( 'Y-m-d H:i:s' ) . '] ' . $level . ' ' . $message;
+		$context = $this->redactor->redact_context( $context );
+		$line    = '[' . gmdate( 'Y-m-d H:i:s' ) . '] ' . $level . ' ' . $message;
 		if ( array() !== $context ) {
 			$encoded = wp_json_encode( $context );
 			if ( false !== $encoded ) {

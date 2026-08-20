@@ -8,7 +8,7 @@ import {
   getIncludeMasks, getExcludeMasks, isDirectoryChecked, isDirectoryIndeterminate,
   expandTreeNode, isTreeNodeChecked, toggleTreeNode,
   fillSiteKeyField, waitForInViewport, getPageScrollY,
-  createTestDir, enableMock, disableMock,
+  createTestDir, enableMock, disableMock, setSiteKey,
   getProgressLabel, parseProgressBytes, getProgressFileCount,
   openPluginsPage, isPluginActive, activatePlugin, deactivatePlugin, isPluginMenuPresent,
 } from './helpers';
@@ -175,24 +175,27 @@ test.describe('File Security Scanner E2E', () => {
   test('S6: Invalid key prompts re-registration', async ({ page }) => {
     await showScenario(page, 'S6: Invalid site key — re-registration prompt');
 
-    // Given: a key from the dump.
+    // Given: dump key synced to mock, then WP key replaced with a junk value.
     await importDump(page, 'has-key');
+    await setSiteKey(page, 'deadbeef');
     await createTestDir(page);
     await login(page);
     await openPluginPage(page);
 
-    // When: user starts a scan.
+    // When: user starts a scan with the invalid key.
     await selectOnlyDirectories(page, ['e2e-test']);
     const scanStarted = await startScan(page);
-    expect(scanStarted).toBe(true);
+    expect(scanStarted).toBe(false);
+    expect(await getNoticeType(page)).toBe('error');
+    expect(await getNoticeText(page)).toMatch(/site key is missing or was rejected/i);
 
-    // Wait for completion (3 files, should be fast).
-    const status = await waitForScanCompletion(page);
-    expect(status).toBe('completed');
+    // Then: re-register via the connection form and scan succeeds.
+    await getSiteKeyViaForm(page, 'admin@llar-imunify.ddev.site', { clearKey: true });
+    expect(await getNoticeType(page)).toBe('success');
 
-    // Results are shown — key works with the mock.
-    await expect(page.locator('.llar-results')).toBeVisible();
-    expect(await countVisibleFiles(page)).toBeGreaterThan(0);
+    await selectOnlyDirectories(page, ['e2e-test']);
+    expect(await startScan(page)).toBe(true);
+    expect(await waitForScanCompletion(page)).toBe('completed');
   });
 
   // =========================================================================

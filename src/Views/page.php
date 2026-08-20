@@ -89,10 +89,12 @@ if ( ! defined( 'ABSPATH' ) ) {
 				<div>
 					<label for="llar-key" class="mb-1.5 block text-sm font-medium text-slate-700"><?php esc_html_e( 'Site key', 'security-scanner' ); ?></label>
 					<input
-						type="text"
+						type="password"
 						id="llar-key"
 						name="security_scanner_key"
-						value="<?php echo esc_attr( $site_key ?? '' ); ?>"
+						value=""
+						autocomplete="off"
+						placeholder="<?php echo $has_key ? esc_attr__( 'Saved — paste a new key to replace', 'security-scanner' ) : ''; ?>"
 						class="block w-full rounded-md border border-slate-300 bg-white px-3 py-2 font-mono text-sm text-slate-800 shadow-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-500/30"
 					/>
 				</div>

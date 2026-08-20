@@ -45,7 +45,7 @@ final class SiteRegistrar {
 		}
 
 		$site_id    = bin2hex( random_bytes( 12 ) );
-		$site_key   = hash( 'sha256', $domain . uniqid( '', true ) );
+		$site_key   = bin2hex( random_bytes( 32 ) );
 		$created    = array(
 			'site_id'  => $site_id,
 			'site_key' => $site_key,
@@ -76,5 +76,43 @@ final class SiteRegistrar {
 		$state = $this->store->load();
 
 		return is_array( $state['sites'] ?? null ) ? $state['sites'] : array();
+	}
+
+	/**
+	 * True when $key matches a registered site key.
+	 *
+	 * @param string $key Site key from X-Site-Key.
+	 */
+	public function is_valid_key( string $key ): bool {
+		if ( '' === $key ) {
+			return false;
+		}
+		foreach ( $this->all() as $site ) {
+			if ( ( $site['key'] ?? '' ) === $key ) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Injects a pre-existing key (e2e dump sync). Overwrites the domain slot.
+	 *
+	 * @param string $domain   Domain key in state.
+	 * @param string $site_id  Site id.
+	 * @param string $site_key Site key.
+	 */
+	public function inject( string $domain, string $site_id, string $site_key ): void {
+		if ( '' === $domain || '' === $site_key ) {
+			throw new \RuntimeException( 'Invalid request' );
+		}
+		$state                         = $this->store->load();
+		$state['sites']                = is_array( $state['sites'] ?? null ) ? $state['sites'] : array();
+		$state['sites'][ $domain ]     = array(
+			'id'   => $site_id !== '' ? $site_id : bin2hex( random_bytes( 12 ) ),
+			'key'  => $site_key,
+			'plan' => 'free',
+		);
+		$this->store->save( $state );
 	}
 }

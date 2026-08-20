@@ -692,8 +692,8 @@ final class ImunifyScanner implements \Llar\SecurityScanner\Contracts\ScannerInt
 	 * @param string $rel  Relative path.
 	 */
 	private function file_size( string $root, string $rel ): ?int {
-		$abs = $this->join( $root, $rel );
-		if ( ! is_file( $abs ) || ! is_readable( $abs ) ) {
+		$abs = $this->resolve_safe( $root, $rel );
+		if ( null === $abs ) {
 			return null;
 		}
 		$size = filesize( $abs );
@@ -710,14 +710,18 @@ final class ImunifyScanner implements \Llar\SecurityScanner\Contracts\ScannerInt
 	 * @param string $rel  Relative path.
 	 */
 	private function file_mtime( string $root, string $rel ): int {
-		$mtime = filemtime( $this->join( $root, $rel ) );
+		$abs = $this->resolve_safe( $root, $rel );
+		if ( null === $abs ) {
+			return 0;
+		}
+		$mtime = filemtime( $abs );
 		return false === $mtime ? 0 : (int) $mtime;
 	}
 
 	/**
 	 * Computes the SHA-256 of a file or null on failure.
 	 *
-	 * @param string $abs Absolute path.
+	 * @param string $abs Absolute path (already validated).
 	 */
 	private function sha256( string $abs ): ?string {
 		if ( ! is_file( $abs ) || ! is_readable( $abs ) ) {
@@ -728,13 +732,48 @@ final class ImunifyScanner implements \Llar\SecurityScanner\Contracts\ScannerInt
 	}
 
 	/**
-	 * Joins a root and a relative path using the OS separator.
+	 * Joins a root and a relative path and rejects traversal / symlink escape.
+	 *
+	 * @param string $root Root.
+	 * @param string $rel  Relative path (forward slashes).
+	 * @return string|null Absolute real path inside $root, or null when unsafe.
+	 */
+	private function resolve_safe( string $root, string $rel ): ?string {
+		$rel = str_replace( '\\', '/', $rel );
+		$parts = array_filter( explode( '/', $rel ), 'strlen' );
+		foreach ( $parts as $part ) {
+			if ( '.' === $part || '..' === $part ) {
+				return null;
+			}
+		}
+
+		$root_real = realpath( $root );
+		if ( false === $root_real ) {
+			return null;
+		}
+
+		$candidate = $root_real . DIRECTORY_SEPARATOR . implode( DIRECTORY_SEPARATOR, $parts );
+		$resolved  = realpath( $candidate );
+		if ( false === $resolved || ! is_file( $resolved ) || ! is_readable( $resolved ) ) {
+			return null;
+		}
+
+		if ( $resolved !== $root_real && 0 !== strpos( $resolved, $root_real . DIRECTORY_SEPARATOR ) ) {
+			return null;
+		}
+
+		return $resolved;
+	}
+
+	/**
+	 * Joins a root and a relative path using the OS separator (unsafe; prefer resolve_safe).
 	 *
 	 * @param string $root Root.
 	 * @param string $rel  Relative path (forward slashes).
 	 */
 	private function join( string $root, string $rel ): string {
-		return $root . DIRECTORY_SEPARATOR . str_replace( '/', DIRECTORY_SEPARATOR, $rel );
+		$safe = $this->resolve_safe( $root, $rel );
+		return null !== $safe ? $safe : '';
 	}
 
 	/**

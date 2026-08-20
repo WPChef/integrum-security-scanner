@@ -52,6 +52,11 @@ final class FileCollector implements FileCollectorInterface {
 				\RecursiveIteratorIterator::LEAVES_ONLY
 			);
 
+			$root_real = realpath( rtrim( $root, DIRECTORY_SEPARATOR ) );
+			if ( false === $root_real ) {
+				continue;
+			}
+
 			foreach ( $iterator as $file ) {
 				/** @var \SplFileInfo $file */
 				$abs = $file->getPathname();
@@ -61,7 +66,13 @@ final class FileCollector implements FileCollectorInterface {
 				}
 				$seen[ $abs ] = true;
 
-				$relative = $this->normalise_relative( $abs, $root );
+				// Reject symlinks (and anything else) whose real path leaves $root.
+				$resolved = realpath( $abs );
+				if ( false === $resolved || ! $this->is_inside( $resolved, $root_real ) ) {
+					continue;
+				}
+
+				$relative = $this->normalise_relative( $resolved, $root_real . DIRECTORY_SEPARATOR );
 				if ( '' === $relative ) {
 					continue;
 				}
@@ -202,5 +213,20 @@ final class FileCollector implements FileCollectorInterface {
 		}
 
 		return $rel;
+	}
+
+	/**
+	 * True when $path is $root or a descendant (after realpath).
+	 *
+	 * @param string $path Resolved absolute path.
+	 * @param string $root Resolved absolute root (no trailing slash).
+	 */
+	private function is_inside( string $path, string $root ): bool {
+		if ( $path === $root ) {
+			return true;
+		}
+
+		$prefix = $root . DIRECTORY_SEPARATOR;
+		return 0 === strpos( $path, $prefix );
 	}
 }

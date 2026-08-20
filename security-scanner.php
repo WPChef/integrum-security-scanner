@@ -71,10 +71,23 @@ if ( is_admin() ) {
 	$file_collector = new \Llar\SecurityScanner\Models\FileCollector();
 	$site_domain    = (string) apply_filters( 'security_scanner_site_domain', '' );
 
-	$scanner_base = (string) apply_filters( 'security_scanner_scanner_api_base', LLAR_SECURITY_SCANNER_SCANNER_API_BASE );
+	$allow_insecure = (bool) apply_filters(
+		'security_scanner_allow_insecure_api',
+		function_exists( 'wp_get_environment_type' ) && 'local' === wp_get_environment_type()
+	);
+
+	$scanner_base = \Llar\SecurityScanner\Models\ApiBaseUrl::resolve(
+		(string) apply_filters( 'security_scanner_scanner_api_base', LLAR_SECURITY_SCANNER_SCANNER_API_BASE ),
+		LLAR_SECURITY_SCANNER_SCANNER_API_BASE,
+		$allow_insecure
+	);
 	$scanner      = new \Llar\SecurityScanner\Models\ImunifyScanner( $http, $logger, $storage, $job_store, $file_collector, $site_domain, $scanner_base );
 
-	$llar_base = (string) apply_filters( 'security_scanner_llar_api_base', LLAR_SECURITY_SCANNER_LLAR_API_BASE );
+	$llar_base = \Llar\SecurityScanner\Models\ApiBaseUrl::resolve(
+		(string) apply_filters( 'security_scanner_llar_api_base', LLAR_SECURITY_SCANNER_LLAR_API_BASE ),
+		LLAR_SECURITY_SCANNER_LLAR_API_BASE,
+		$allow_insecure
+	);
 	$licensing = new \Llar\SecurityScanner\Services\LicensingService( $http, $logger, $storage, $llar_base );
 
 	$admin = new \Llar\SecurityScanner\Controllers\AdminController( $scanner, $storage, $licensing, $logger, $file_collector );
