@@ -7,7 +7,7 @@ import {
   setIncludeMasks, setExcludeMasks, toggleDirectory, selectOnlyDirectories,
   getIncludeMasks, getExcludeMasks, isDirectoryChecked, isDirectoryIndeterminate,
   expandTreeNode, isTreeNodeChecked, toggleTreeNode,
-  fillSiteKeyField,
+  fillSiteKeyField, waitForInViewport, getPageScrollY,
   createTestDir, enableMock, disableMock,
   getProgressLabel, parseProgressBytes, getProgressFileCount,
   openPluginsPage, isPluginActive, activatePlugin, deactivatePlugin, isPluginMenuPresent,
@@ -473,5 +473,58 @@ test.describe('File Security Scanner E2E', () => {
     expect(await isDirectoryIndeterminate(page, 'root')).toBe(false);
     expect(await isTreeNodeChecked(page, 'wp-content/plugins')).toBe(true);
     await expect(page.locator('.llar-tree-flags input')).toHaveCount(0);
+  });
+
+  // =========================================================================
+  // S24 — Feedback (notices / progress bar) scrolled into the visible area
+  // =========================================================================
+  test('S24: Notices and progress bar scroll into the viewport', async ({ page }) => {
+    await showScenario(page, 'S24: Error notice and progress bar land in the visible area');
+
+    // ── Phase A: an error notice lands in the visible area ────────────
+    // Given: a registered site — re-registering it fails with an error notice.
+    await importDump(page, 'has-key');
+    await login(page);
+    await openPluginPage(page);
+
+    // First registration succeeds (mock was reset by beforeEach).
+    await getSiteKeyViaForm(page, 'admin@llar-imunify.ddev.site', { clearKey: true });
+    await page.waitForTimeout(500);
+    expect(await getNoticeType(page)).toBe('success');
+
+    // When: the same domain is re-registered → error notice after redirect.
+    await getSiteKeyViaForm(page, 'admin@llar-imunify.ddev.site', { clearKey: true });
+    await page.waitForTimeout(500);
+    expect(await getNoticeType(page)).toBe('error');
+
+    // Then: the notice is in the visible area (never rendered off-screen).
+    await waitForInViewport(page, '.security-scanner-notice');
+
+    // ── Phase B: the progress bar lands in the visible area ───────────
+    // Given: a working key (dump) and a fresh job on the fast test dir.
+    // The import replaces the DB and wipes the Phase A session, so log in again.
+    await importDump(page, 'has-key');
+    await login(page);
+    await createTestDir(page);
+    await openPluginPage(page);
+    await selectOnlyDirectories(page, ['e2e-test']);
+    const started = await startScan(page);
+    expect(started).toBe(true);
+
+    // Then: the revealed progress section (below the fold after the PRG
+    // redirect) is scrolled into the viewport, and the page actually moved.
+    await waitForInViewport(page, '.llar-status');
+    await expect(page.locator('.llar-progress')).toBeVisible();
+    expect(await getPageScrollY(page)).toBeGreaterThan(0);
+
+    // ── Phase C: a notice injected mid-page lands in the visible area ─
+    // Given: the scan is running and the user is down at the progress bar.
+    // When: the scan is stopped → the confirmation notice is injected at the
+    // top of #wpbody-content (far outside the viewport).
+    const stopBtn = page.locator('.llar-scan-actions__stop');
+    await stopBtn.click();
+
+    // Then: the injected notice is scrolled into the visible area.
+    await waitForInViewport(page, '#wpbody-content > .notice.notice-info');
   });
 });

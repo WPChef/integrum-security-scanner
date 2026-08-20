@@ -428,6 +428,35 @@ export async function fillSiteKeyField(page: Page, key: string): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// Viewport (S24: notices / progress bar scrolled into the visible area)
+// ---------------------------------------------------------------------------
+
+/**
+ * Waits until the element matching the selector intersects the viewport.
+ *
+ * Handles hidden elements (zero rect) and smooth scrolling by polling.
+ */
+export async function waitForInViewport(page: Page, selector: string): Promise<void> {
+  await page.waitForFunction(
+    (sel) => {
+      const el = document.querySelector(sel);
+      if (!el) return false;
+      const rect = el.getBoundingClientRect();
+      return rect.height > 0 && rect.top < window.innerHeight && rect.bottom > 0;
+    },
+    selector,
+    { timeout: 10_000 },
+  );
+}
+
+/**
+ * Returns the current vertical scroll position of the page.
+ */
+export async function getPageScrollY(page: Page): Promise<number> {
+  return page.evaluate(() => window.scrollY);
+}
+
+// ---------------------------------------------------------------------------
 // Polling
 // ---------------------------------------------------------------------------
 

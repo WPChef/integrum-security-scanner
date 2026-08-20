@@ -1,0 +1,18 @@
+/**
+ * Start scan form: show a loading state until the server finishes the
+ * manifest build + redirect. The scan does not really start until the
+ * first status poll returns, so this is the user's feedback during that
+ * gap.
+ */
+export function initStartForm() {
+	const startForm = document.querySelector( '.llar-start-form' );
+	const startBtn = document.querySelector( '.llar-scan-actions__start' );
+	if ( ! startForm || ! startBtn ) {
+		return;
+	}
+
+	startForm.addEventListener( 'submit', function () {
+		startBtn.classList.add( 'is-loading' );
+		startBtn.disabled = true;
+	} );
+}

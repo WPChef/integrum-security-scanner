@@ -99,6 +99,8 @@ final class AdminController {
 		// #security-scanner-app and preflight is disabled so the WP admin
 		// chrome is never affected. Rebuild with:
 		// node node_modules/tailwindcss/lib/cli.js -i tailwind-src.css -o wp-content/plugins/security-scanner/assets/css/tailwind.build.css --minify
+		// admin.js is an esbuild bundle of the ES modules in assets/js/src/.
+		// Rebuild with: npm run build:js (from the dev workspace root).
 		// Asset versions use filemtime so every code change busts the browser
 		// cache (a stale admin.js otherwise leaves the file tree empty).
 		$css_ver = (string) filemtime( LLAR_SECURITY_SCANNER_DIR . 'assets/css/tailwind.build.css' );
