@@ -132,6 +132,8 @@ final class AdminController {
 					'error'    => __( 'Scan failed. Please try again.', 'security-scanner' ),
 					'saveKey'  => __( 'Save key', 'security-scanner' ),
 					'register' => __( 'Register', 'security-scanner' ),
+					'showKey'  => __( 'Show site key', 'security-scanner' ),
+					'hideKey'  => __( 'Hide site key', 'security-scanner' ),
 					'stopped'  => __( 'Scan stopped.', 'security-scanner' ),
 					'stopping' => __( 'Stopping…', 'security-scanner' ),
 					'file'     => __( 'file', 'security-scanner' ),

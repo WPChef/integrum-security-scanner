@@ -427,6 +427,20 @@ export async function fillSiteKeyField(page: Page, key: string): Promise<void> {
   await page.locator('#llar-key').fill(key);
 }
 
+/**
+ * Returns the current type of the site key field ('password' = masked).
+ */
+export async function getKeyFieldType(page: Page): Promise<string> {
+  return (await page.locator('#llar-key').getAttribute('type')) ?? '';
+}
+
+/**
+ * Clicks the eye toggle next to the site key field.
+ */
+export async function toggleKeyVisibility(page: Page): Promise<void> {
+  await page.locator('#llar-key-toggle').click();
+}
+
 // ---------------------------------------------------------------------------
 // Viewport (S24: notices / progress bar scrolled into the visible area)
 // ---------------------------------------------------------------------------

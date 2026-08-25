@@ -14,6 +14,27 @@
     }
     keyField.addEventListener("input", updateKeyBtn);
     updateKeyBtn();
+    const toggleBtn = document.getElementById("llar-key-toggle");
+    if (!toggleBtn) {
+      return;
+    }
+    const iconOn = toggleBtn.querySelector(".llar-key-icon:not(.llar-key-icon--off)");
+    const iconOff = toggleBtn.querySelector(".llar-key-icon--off");
+    toggleBtn.addEventListener("click", function() {
+      const reveal = "password" === keyField.type;
+      keyField.type = reveal ? "text" : "password";
+      toggleBtn.setAttribute("aria-pressed", String(reveal));
+      toggleBtn.setAttribute(
+        "aria-label",
+        reveal ? CFG.i18n && CFG.i18n.hideKey || "Hide site key" : CFG.i18n && CFG.i18n.showKey || "Show site key"
+      );
+      if (iconOn) {
+        iconOn.hidden = reveal;
+      }
+      if (iconOff) {
+        iconOff.hidden = !reveal;
+      }
+    });
   }
 
   // wp-content/plugins/security-scanner/assets/js/src/ajax.js

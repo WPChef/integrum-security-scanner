@@ -7,7 +7,7 @@ import {
   setIncludeMasks, setExcludeMasks, toggleDirectory, selectOnlyDirectories,
   getIncludeMasks, getExcludeMasks, isDirectoryChecked, isDirectoryIndeterminate,
   expandTreeNode, isTreeNodeChecked, toggleTreeNode,
-  fillSiteKeyField, waitForInViewport, getPageScrollY,
+  fillSiteKeyField, getKeyFieldType, toggleKeyVisibility, waitForInViewport, getPageScrollY,
   createTestDir, enableMock, disableMock, setSiteKey,
   getProgressLabel, parseProgressBytes, getProgressFileCount,
   openPluginsPage, isPluginActive, activatePlugin, deactivatePlugin, isPluginMenuPresent,
@@ -49,6 +49,10 @@ test.describe('File Security Scanner E2E', () => {
     expect(await getNoticeType(page)).toBe('success');
     expect(await getNoticeText(page)).toContain('Site registered');
     expect(await isScanDisabled(page)).toBe(false);
+
+    // And: the site key is pre-filled in the field, masked with asterisks.
+    expect(await getKeyFieldType(page)).toBe('password');
+    expect((await page.locator('#llar-key').inputValue()).length).toBeGreaterThan(0);
 
     // Create test directory with 3 small files + register it as a scan option.
     // Then scan only those files (fast: ~20s).
@@ -279,10 +283,22 @@ test.describe('File Security Scanner E2E', () => {
     // Then: a success notice confirms the save.
     expect(await getNoticeType(page)).toBe('success');
 
-    // And: after reload the key is still there.
+    // And: after reload the key is still in the field, masked with asterisks.
     await openPluginPage(page);
-    const keyField = await page.locator('#llar-key').inputValue();
-    expect(keyField).toBe(fakeKey);
+    const keyField = page.locator('#llar-key');
+    expect(await keyField.inputValue()).toBe(fakeKey);
+    expect(await getKeyFieldType(page)).toBe('password');
+
+    // The eye icon reveals the key, the second click masks it again.
+    const toggle = page.locator('#llar-key-toggle');
+    expect(await toggle.getAttribute('aria-pressed')).toBe('false');
+    await toggleKeyVisibility(page);
+    expect(await getKeyFieldType(page)).toBe('text');
+    expect(await keyField.inputValue()).toBe(fakeKey);
+    expect(await toggle.getAttribute('aria-pressed')).toBe('true');
+    await toggleKeyVisibility(page);
+    expect(await getKeyFieldType(page)).toBe('password');
+    expect(await toggle.getAttribute('aria-pressed')).toBe('false');
   });
 
   // =========================================================================
