@@ -166,7 +166,7 @@ final class ImunifyScanner implements \Llar\SecurityScanner\Contracts\ScannerInt
 		$resp = $this->call( 'POST', '/scan/start', $key, array( 'files' => $manifest ) );
 
 		if ( empty( $resp['body']['job_id'] ) ) {
-			throw new ScanException( 'No job_id returned by scanner.' );
+			throw new ScanException( __( 'No job_id returned by scanner.', 'security-scanner' ) );
 		}
 
 		$job_id = (string) $resp['body']['job_id'];
@@ -495,11 +495,17 @@ final class ImunifyScanner implements \Llar\SecurityScanner\Contracts\ScannerInt
 		try {
 			$resp = $this->http->upload( $url, $abs, $file_id, $key );
 		} catch ( HttpException $e ) {
-			throw new ScanException( 'Upload failed.', 0, $e );
+			throw new ScanException( __( 'Upload failed.', 'security-scanner' ), 0, $e );
 		}
 
 		if ( $resp['code'] < 200 || $resp['code'] >= 300 ) {
-			throw new ScanException( 'Upload rejected: HTTP ' . $resp['code'] );
+			throw new ScanException(
+				sprintf(
+					/* translators: %d: HTTP status code returned by the scanner API. */
+					__( 'Upload rejected: HTTP %d.', 'security-scanner' ),
+					(int) $resp['code']
+				)
+			);
 		}
 	}
 
@@ -525,7 +531,7 @@ final class ImunifyScanner implements \Llar\SecurityScanner\Contracts\ScannerInt
 			try {
 				$resp = $this->http->request( $method, $url, $body, $key );
 			} catch ( HttpException $e2 ) {
-				throw new ScanException( 'Scanner is temporarily unavailable.', 0, $e2 );
+				throw new ScanException( __( 'Scanner is temporarily unavailable.', 'security-scanner' ), 0, $e2 );
 			}
 		}
 
@@ -540,7 +546,7 @@ final class ImunifyScanner implements \Llar\SecurityScanner\Contracts\ScannerInt
 			try {
 				$resp = $this->http->request( $method, $url, $body, $key );
 			} catch ( HttpException $e ) {
-				throw new ScanException( 'Scanner returned server error.', 0, $e );
+				throw new ScanException( __( 'Scanner returned server error.', 'security-scanner' ), 0, $e );
 			}
 		}
 
@@ -549,7 +555,13 @@ final class ImunifyScanner implements \Llar\SecurityScanner\Contracts\ScannerInt
 		}
 
 		if ( $resp['code'] < 200 || $resp['code'] >= 300 ) {
-			throw new ScanException( 'Scanner error: HTTP ' . $resp['code'] );
+			throw new ScanException(
+				sprintf(
+					/* translators: %d: HTTP status code returned by the scanner API. */
+					__( 'Scanner error: HTTP %d.', 'security-scanner' ),
+					(int) $resp['code']
+				)
+			);
 		}
 
 		return $resp;
@@ -575,18 +587,24 @@ final class ImunifyScanner implements \Llar\SecurityScanner\Contracts\ScannerInt
 
 		// Quota / rate-limit: the key is valid, the limit was hit.
 		if ( 403 === $http_code && 'quota_exceeded' === $api_code ) {
-			$msg    = '' !== $message ? $message : 'Scan quota exceeded.';
+			$msg    = '' !== $message ? $message : __( 'Scan quota exceeded.', 'security-scanner' );
 			$quota  = is_array( $body['quota'] ?? null ) ? $body['quota'] : array();
 			$resets = (int) ( $quota['resets_in'] ?? 0 );
 			if ( $resets > 0 ) {
-				$days = (int) round( $resets / 86400 );
-				$msg .= ' Resets in ' . max( 1, $days ) . ' day(s).';
+				$days = max( 1, (int) round( $resets / 86400 ) );
+				$msg .= ' ' . sprintf(
+					/* translators: %d: number of days until the scan quota resets. */
+					_n( 'Resets in %d day.', 'Resets in %d days.', $days, 'security-scanner' ),
+					$days
+				);
 			}
 			return new ScanException( $msg, 403 );
 		}
 
 		if ( '' === $message ) {
-			$message = 401 === $http_code ? 'Invalid site key.' : 'Scanner rejected the request.';
+			$message = 401 === $http_code
+				? __( 'Invalid site key.', 'security-scanner' )
+				: __( 'Scanner rejected the request.', 'security-scanner' );
 		}
 
 		return new ScanException( $message, 401 === $http_code ? 401 : 403 );

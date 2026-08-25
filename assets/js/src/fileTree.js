@@ -2,6 +2,7 @@
  * File-tree rendering, shared by the files-to-scan preview and the scan
  * results: groups rows into a nested tree and renders it as nested lists.
  */
+import { CFG } from './config.js';
 
 /**
  * Groups rows into a nested { children, files } tree by path segments.
@@ -88,7 +89,8 @@ function renderFile( row ) {
 	if ( row.severity ) {
 		const sev = document.createElement( 'span' );
 		sev.className = 'llar-sev llar-sev--' + row.severity;
-		sev.textContent = row.severity;
+		const labels = ( CFG.i18n && CFG.i18n.severity ) || {};
+		sev.textContent = labels[ row.severity ] || row.severity;
 		li.appendChild( sev );
 	}
 

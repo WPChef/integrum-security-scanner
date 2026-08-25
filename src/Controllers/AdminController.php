@@ -128,7 +128,6 @@ final class AdminController {
 				'ajaxUrl' => admin_url( 'admin-ajax.php' ),
 				'nonce'   => wp_create_nonce( self::NONCE_POLL ),
 				'i18n'    => array(
-					'stay'     => __( 'Do not close this page until the scan completes.', 'security-scanner' ),
 					'error'    => __( 'Scan failed. Please try again.', 'security-scanner' ),
 					'saveKey'  => __( 'Save key', 'security-scanner' ),
 					'register' => __( 'Register', 'security-scanner' ),
@@ -138,6 +137,12 @@ final class AdminController {
 					'stopping' => __( 'Stopping…', 'security-scanner' ),
 					'file'     => __( 'file', 'security-scanner' ),
 					'files'    => __( 'files', 'security-scanner' ),
+					'severity' => array(
+						'critical' => __( 'critical', 'security-scanner' ),
+						'medium'   => __( 'medium', 'security-scanner' ),
+						'low'      => __( 'low', 'security-scanner' ),
+						'info'     => __( 'info', 'security-scanner' ),
+					),
 				),
 			)
 		);
@@ -261,7 +266,7 @@ final class AdminController {
 			$is_key_error = 401 === $e->getCode();
 			$real_message = $e->getMessage();
 			$message      = $is_key_error
-				? __( 'The site key is missing or was rejected. Use the "Get site key" form above to obtain a new key, then start the scan again.', 'security-scanner' )
+				? __( 'The site key is missing or was rejected. Use the Connection form above to obtain a new key, then start the scan again.', 'security-scanner' )
 				: ( '' !== $real_message ? $real_message : __( 'Could not start the scan. Please try again in a moment.', 'security-scanner' ) );
 
 			$this->redirect(

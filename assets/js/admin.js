@@ -382,7 +382,8 @@
     if (row.severity) {
       const sev = document.createElement("span");
       sev.className = "llar-sev llar-sev--" + row.severity;
-      sev.textContent = row.severity;
+      const labels = CFG.i18n && CFG.i18n.severity || {};
+      sev.textContent = labels[row.severity] || row.severity;
       li.appendChild(sev);
     }
     if (row.threat_type) {
