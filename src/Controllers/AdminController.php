@@ -102,9 +102,13 @@ final class AdminController {
 		// admin.js is an esbuild bundle of the ES modules in assets/js/src/.
 		// Rebuild with: npm run build:js (from the dev workspace root).
 		// Asset versions use filemtime so every code change busts the browser
-		// cache (a stale admin.js otherwise leaves the file tree empty).
-		$css_ver = (string) filemtime( LLAR_SECURITY_SCANNER_DIR . 'assets/css/tailwind.build.css' );
-		$js_ver  = (string) filemtime( LLAR_SECURITY_SCANNER_DIR . 'assets/js/admin.js' );
+		// cache (a stale admin.js otherwise leaves the file tree empty). Built
+		// assets are gitignored, so fall back to the plugin version until the
+		// missing file is rebuilt to avoid a filemtime() stat warning.
+		$css_path = LLAR_SECURITY_SCANNER_DIR . 'assets/css/tailwind.build.css';
+		$js_path  = LLAR_SECURITY_SCANNER_DIR . 'assets/js/admin.js';
+		$css_ver  = file_exists( $css_path ) ? (string) filemtime( $css_path ) : LLAR_SECURITY_SCANNER_VERSION;
+		$js_ver   = file_exists( $js_path ) ? (string) filemtime( $js_path ) : LLAR_SECURITY_SCANNER_VERSION;
 
 		wp_enqueue_style(
 			'security-scanner-admin',
