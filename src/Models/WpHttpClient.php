@@ -24,6 +24,11 @@ use Llar\SecurityScanner\Contracts\HttpException;
 final class WpHttpClient implements HttpClientInterface {
 
 	/**
+	 * Maximum characters of an error response body kept in the log.
+	 */
+	private const LOG_BODY_SNIPPET = 300;
+
+	/**
 	 * Optional logger; null = no request-level logging.
 	 */
 	private ?\Llar\SecurityScanner\Contracts\LoggerInterface $logger;
@@ -139,7 +144,12 @@ final class WpHttpClient implements HttpClientInterface {
 		$decoded  = json_decode( $raw_body, true );
 		$body     = is_array( $decoded ) ? $decoded : array( 'raw' => $raw_body );
 
-		$this->log_response( $method, $url, $code, $body );
+		// On errors the response body carries the reason (API error JSON or a
+		// proxy/CDN HTML page); keep a truncated copy in the log so support can
+		// see why a request failed without a packet capture.
+		$snippet = $code >= 400 ? substr( $raw_body, 0, self::LOG_BODY_SNIPPET ) : null;
+
+		$this->log_response( $method, $url, $code, $body, null, $snippet );
 
 		return array(
 			'code' => $code,
@@ -174,13 +184,14 @@ final class WpHttpClient implements HttpClientInterface {
 	/**
 	 * Logs the response (or WP_Error) for a request.
 	 *
-	 * @param string                      $method HTTP method.
-	 * @param string                      $url    URL.
-	 * @param int                         $code   HTTP status (0 for WP_Error).
-	 * @param array<string, mixed>|string $body  Decoded body or error message.
-	 * @param string|null                 $error  WP_Error detail (only when $code is 0).
+	 * @param string                      $method  HTTP method.
+	 * @param string                      $url     Request URL.
+	 * @param int                         $code    HTTP status (0 for WP_Error).
+	 * @param array<string, mixed>|string $body    Decoded body or error message.
+	 * @param string|null                 $error   WP_Error detail (only when $code is 0).
+	 * @param string|null                 $snippet Truncated raw body (HTTP >= 4xx only).
 	 */
-	private function log_response( string $method, string $url, int $code, $body, ?string $error = null ): void {
+	private function log_response( string $method, string $url, int $code, $body, ?string $error = null, ?string $snippet = null ): void {
 		if ( null === $this->logger ) {
 			return;
 		}
@@ -192,6 +203,10 @@ final class WpHttpClient implements HttpClientInterface {
 		} elseif ( is_array( $body ) ) {
 			// Keep log compact: surface the top-level keys, not full payload.
 			$ctx['keys'] = array_keys( $body );
+		}
+
+		if ( null !== $snippet && '' !== $snippet ) {
+			$ctx['body'] = $snippet;
 		}
 
 		$this->logger->debug(
