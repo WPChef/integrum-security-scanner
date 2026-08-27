@@ -60,13 +60,14 @@ final class ScanEngine {
 		$job_files = array();
 		foreach ( $files as $f ) {
 			$idx     = (int) ( $f['file_index'] ?? -1 );
+			$path    = (string) ( $f['path'] ?? '' );
 			$file_id = bin2hex( random_bytes( 8 ) );
-			$verdict = $this->verdicts->verdict( $idx );
+			$verdict = $this->verdicts->verdict( $idx, $path );
 
 			$job_files[] = array(
 				'file_id'        => $file_id,
 				'file_index'     => $idx,
-				'action'         => $this->verdicts->action( $idx ),
+				'action'         => $this->verdicts->action( $idx, $path ),
 				'verdict'        => $verdict,
 				'signature_name' => $this->verdicts->signature( $verdict ),
 				// Deterministic placeholder hash: the real API echoes the client

@@ -21,18 +21,20 @@ interface VerdictStrategy {
 	/**
 	 * Returns the simulated Imunify action for this file.
 	 *
-	 * @param int $file_index Zero-based index in the manifest.
+	 * @param int    $file_index Zero-based index in the manifest.
+	 * @param string $path       Manifest path (may influence the decision).
 	 * @return string needs_sha256|needs_upload|has_verdict
 	 */
-	public function action( int $file_index ): string;
+	public function action( int $file_index, string $path = '' ): string;
 
 	/**
 	 * Returns the final verdict for this file.
 	 *
-	 * @param int $file_index Zero-based index.
+	 * @param int    $file_index Zero-based index.
+	 * @param string $path       Manifest path (may influence the decision).
 	 * @return string clean|malicious|suspicious
 	 */
-	public function verdict( int $file_index ): string;
+	public function verdict( int $file_index, string $path = '' ): string;
 
 	/**
 	 * Returns a human-readable signature name for a verdict.
