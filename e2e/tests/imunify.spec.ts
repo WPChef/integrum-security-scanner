@@ -64,8 +64,9 @@ test.describe('File Security Scanner E2E', () => {
     const scanStarted = await startScan(page);
     expect(scanStarted).toBe(true);
 
-    // Then: progress bar is visible, and the status section reminds the user
-    // not to close the page (the text lives directly inside .llar-status).
+    // Then: progress bar is visible inside the scan area, and the status
+    // block reminds the user not to close the page (unified tree: the
+    // progress lives in the same section as the directory selector).
     await expect(page.locator('.llar-progress')).toBeVisible();
     await expect(page.locator('.llar-status')).toContainText('Do not close');
 
@@ -103,8 +104,10 @@ test.describe('File Security Scanner E2E', () => {
     const status = await waitForScanCompletion(page);
     expect(status).toBe('completed');
 
-    // Then: results section appears.
-    await expect(page.locator('.llar-results')).toBeVisible();
+    // Then: results are attached to the directory tree — the tree is marked
+    // complete and every scanned folder carries a result badge.
+    await expect(page.locator('.llar-dirtree.is-complete')).toBeVisible();
+    await expect(page.locator('.llar-dirtree .llar-node-badge').first()).toBeVisible();
 
     // "Show suspicious only" should be checked by default.
     expect(await isSuspiciousOnlyChecked(page)).toBe(true);
@@ -401,7 +404,7 @@ test.describe('File Security Scanner E2E', () => {
   });
 
   // =========================================================================
-  // S22 — Files-to-scan preview: tree on page load + default directories
+  // S22 — Unified tree: files-to-scan preview on page load + defaults
   // =========================================================================
   test('S22: Files-to-scan preview renders before any scan', async ({ page }) => {
     await showScenario(page, 'S22: Files-to-scan preview — tree on load, all directories checked by default');
@@ -419,28 +422,44 @@ test.describe('File Security Scanner E2E', () => {
     expect(await isDirectoryChecked(page, 'wp-includes')).toBe(true);
     expect(await isDirectoryChecked(page, 'wp-content')).toBe(true);
 
-    // And: the preview section is visible immediately, before any scan.
-    await expect(page.locator('.llar-preview')).toBeVisible();
+    // And: the unified tree is visible immediately, before any scan, with
+    // the files-to-scan preview attached under the selected folders.
+    await expect(page.locator('.llar-dirtree')).toBeVisible();
     // The default selection covers the whole install, so wait generously for
     // the first (heaviest) render to finish: the loading hint disappears and
-    // the counter reports a file count. (Tree files themselves live inside
-    // collapsed folders, so visibility is asserted via the section, not <li>.)
+    // the counter reports a file count. (Preview files live inside collapsed
+    // folders, so visibility is asserted via the hints, not <li>.)
     await expect(page.locator('.llar-preview__loading')).toBeHidden({ timeout: 30_000 });
     await expect(page.locator('.llar-preview__count')).toContainText(/files/);
+
+    // Regression (unified tree): expanding a folder the preview already
+    // populated with synthetic rows (plugins, themes, mu-plugins) must not
+    // duplicate them. The lazy load is proven complete by uploads/ appearing
+    // — it holds no matching files, so only the dirchildren call can add it.
+    await expandTreeNode(page, 'wp-content');
+    await expect(
+      page.locator('.llar-dirtree__node[data-rel="wp-content/uploads"]')
+    ).toHaveCount(1, { timeout: 10_000 });
+    await expect(
+      page.locator('.llar-dirtree__node[data-rel="wp-content/plugins"]')
+    ).toHaveCount(1);
 
     // When: the user narrows the selection to the small test directory.
     await selectOnlyDirectories(page, ['e2e-test']);
 
-    // Then: the preview refreshes (debounced) and shows exactly its 3 files.
-    await expect(page.locator('.llar-preview .llar-tree__file'))
+    // Then: the preview refreshes (debounced) and shows exactly its 3 files
+    // as pending rows under the e2e-test folder.
+    await expect(page.locator('.llar-dirtree .llar-tree__file'))
       .toHaveCount(3, { timeout: 15_000 });
+    await expect(page.locator('.llar-dirtree .llar-tree__file.is-pending'))
+      .toHaveCount(3);
     await expect(page.locator('.llar-preview__count')).toHaveText(/^3 files$/);
 
     // When: an include mask narrows the scope to a single file.
     await setIncludeMasks(page, 'test-0.php');
 
     // Then: the preview applies the mask exactly like a real scan would.
-    await expect(page.locator('.llar-preview .llar-tree__file'))
+    await expect(page.locator('.llar-dirtree .llar-tree__file'))
       .toHaveCount(1, { timeout: 15_000 });
   });
 

@@ -352,9 +352,9 @@ final class ImunifyScanner implements \Llar\SecurityScanner\Contracts\ScannerInt
 		$paths = is_array( $map['paths'] ?? null ) ? $map['paths'] : array();
 		$sizes = is_array( $map['sizes'] ?? null ) ? $map['sizes'] : array();
 
-		$done           = $this->store->load_done( $job_id );
-		$progress       = $this->store->load_progress( $job_id );
-		$scanned_bytes  = (int) ( $progress['scanned_bytes'] ?? 0 );
+		$done          = $this->store->load_done( $job_id );
+		$progress      = $this->store->load_progress( $job_id );
+		$scanned_bytes = (int) ( $progress['scanned_bytes'] ?? 0 );
 		// Track which file_index values have already been charged so the same
 		// file flowing through needs_sha256 → needs_upload is counted only once.
 		// Keyed by file_index (stable, client-assigned), not file_id.
@@ -441,7 +441,13 @@ final class ImunifyScanner implements \Llar\SecurityScanner\Contracts\ScannerInt
 		}
 
 		if ( $progress_dirty ) {
-			$this->store->save_progress( $job_id, array( 'scanned_bytes' => $scanned_bytes, 'charged' => $charged ) );
+			$this->store->save_progress(
+				$job_id,
+				array(
+					'scanned_bytes' => $scanned_bytes,
+					'charged'       => $charged,
+				)
+			);
 		}
 	}
 
@@ -628,8 +634,30 @@ final class ImunifyScanner implements \Llar\SecurityScanner\Contracts\ScannerInt
 			$this->verdict_to_status( $verdict ),
 			(string) ( $row['signature_name'] ?? ( $row['threat_type'] ?? '' ) ),
 			$this->verdict_to_severity( $verdict ),
-			isset( $row['scanned_at'] ) ? (string) $row['scanned_at'] : null
+			isset( $row['scanned_at'] ) ? (string) $row['scanned_at'] : null,
+			$this->result_detail( $row, $verdict )
 		);
+	}
+
+	/**
+	 * Extracts the raw Imunify response fields surfaced in the results detail
+	 * view. Only known scalar fields with a non-empty value are kept, so the UI
+	 * never renders unexpected payload noise.
+	 *
+	 * @param array<string, mixed> $row     /results.files[*] entry.
+	 * @param string               $verdict Raw verdict.
+	 * @return array<string, string>
+	 */
+	private function result_detail( array $row, string $verdict ): array {
+		$fields = array(
+			'verdict'        => $verdict,
+			'signature_name' => (string) ( $row['signature_name'] ?? '' ),
+			'file_id'        => (string) ( $row['file_id'] ?? '' ),
+			'sha256'         => (string) ( $row['sha256'] ?? '' ),
+			'scanned_at'     => isset( $row['scanned_at'] ) ? (string) $row['scanned_at'] : '',
+		);
+
+		return array_filter( $fields, 'strlen' );
 	}
 
 	/**
@@ -757,7 +785,7 @@ final class ImunifyScanner implements \Llar\SecurityScanner\Contracts\ScannerInt
 	 * @return string|null Absolute real path inside $root, or null when unsafe.
 	 */
 	private function resolve_safe( string $root, string $rel ): ?string {
-		$rel = str_replace( '\\', '/', $rel );
+		$rel   = str_replace( '\\', '/', $rel );
 		$parts = array_filter( explode( '/', $rel ), 'strlen' );
 		foreach ( $parts as $part ) {
 			if ( '.' === $part || '..' === $part ) {

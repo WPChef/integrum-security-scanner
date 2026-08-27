@@ -622,6 +622,7 @@ final class AdminController {
 				'threat_type' => $r->threat_type,
 				'severity'    => $r->severity,
 				'scanned_at'  => $r->scanned_at,
+				'detail'      => $r->detail,
 			);
 		}
 

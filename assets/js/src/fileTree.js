@@ -1,81 +1,20 @@
 /**
- * File-tree rendering, shared by the files-to-scan preview and the scan
- * results: groups rows into a nested tree and renders it as nested lists.
+ * File-row rendering, shared by the files-to-scan preview and the scan
+ * results: both attach per-file rows to the unified directory tree
+ * (assets/js/src/dirTree.js owns the folder rows).
  */
 import { CFG } from './config.js';
 
 /**
- * Groups rows into a nested { children, files } tree by path segments.
+ * Builds a <li> for a single file row.
+ *
+ * Preview rows use status 'pending' (muted); result rows carry the Imunify
+ * verdict, severity badge, threat name and the raw-response detail block.
+ *
+ * @param {{file_path: string, status: string, severity?: string, threat_type?: string, detail?: Object}} row File row.
+ * @return {Element}
  */
-export function buildTree( rows ) {
-	const root = { children: {}, files: [] };
-
-	rows.forEach( function ( row ) {
-		const parts = row.file_path.split( '/' );
-		let node = root;
-
-		for ( let i = 0; i < parts.length - 1; i++ ) {
-			const seg = parts[ i ];
-			node.children[ seg ] = node.children[ seg ] || { children: {}, files: [] };
-			node = node.children[ seg ];
-		}
-		node.files.push( row );
-	} );
-
-	return root;
-}
-
-/**
- * Builds a <ul> for a tree node. Folders containing suspicious/infected
- * files are expanded by default so problems are immediately visible.
- */
-export function renderNode( node, prefix, isRoot ) {
-	const ul = document.createElement( 'ul' );
-	ul.className = 'llar-tree__list' + ( isRoot ? ' is-root' : '' );
-
-	Object.keys( node.children ).sort().forEach( function ( name ) {
-		const child = node.children[ name ];
-		const path = prefix ? prefix + '/' + name : name;
-		const hasProblems = nodeHasProblems( child );
-
-		const li = document.createElement( 'li' );
-		li.className = 'llar-tree__folder';
-
-		const toggle = document.createElement( 'span' );
-		toggle.className = 'llar-tree__toggle';
-		toggle.textContent = hasProblems ? '▾' : '▸';
-		li.appendChild( toggle );
-
-		const label = document.createElement( 'span' );
-		label.className = 'llar-tree__folder-name' + ( hasProblems ? ' has-problems' : '' );
-		label.textContent = path + '/';
-		li.appendChild( label );
-
-		const subtree = renderNode( child, path, false );
-		subtree.hidden = ! hasProblems;
-		li.appendChild( subtree );
-
-		toggle.addEventListener( 'click', function () {
-			subtree.hidden = ! subtree.hidden;
-			toggle.textContent = subtree.hidden ? '▸' : '▾';
-		} );
-
-		ul.appendChild( li );
-	} );
-
-	node.files.sort( function ( a, b ) {
-		return a.file_path < b.file_path ? -1 : 1;
-	} ).forEach( function ( row ) {
-		ul.appendChild( renderFile( row ) );
-	} );
-
-	return ul;
-}
-
-/**
- * Builds a <li> for a single scanned file.
- */
-function renderFile( row ) {
+export function renderFile( row ) {
 	const li = document.createElement( 'li' );
 	li.className = 'llar-tree__file' + fileStatusClass( row );
 
@@ -101,26 +40,71 @@ function renderFile( row ) {
 		li.appendChild( t );
 	}
 
+	if ( row.detail && Object.keys( row.detail ).length ) {
+		li.appendChild( buildDetail( row.detail ) );
+	}
+
 	return li;
+}
+
+/**
+ * Directory part of a relative file path ('' for site root).
+ *
+ * @param {string} path Relative file path.
+ * @return {string}
+ */
+export function dirname( path ) {
+	const idx = path.lastIndexOf( '/' );
+	return -1 === idx ? '' : path.slice( 0, idx );
+}
+
+/**
+ * Builds the expandable raw-Imunify-response block for a file row.
+ *
+ * @param {Object<string, string>} detail Raw response fields.
+ */
+function buildDetail( detail ) {
+	const wrap = document.createElement( 'span' );
+	wrap.className = 'llar-file-detail';
+
+	const btn = document.createElement( 'button' );
+	btn.type = 'button';
+	btn.className = 'llar-file-detail__toggle';
+	btn.textContent = 'ⓘ';
+	btn.title = 'Imunify response';
+	btn.setAttribute( 'aria-expanded', 'false' );
+	wrap.appendChild( btn );
+
+	const panel = document.createElement( 'span' );
+	panel.className = 'llar-file-detail__panel';
+	panel.hidden = true;
+	Object.keys( detail ).forEach( function ( key ) {
+		const item = document.createElement( 'span' );
+		item.className = 'llar-file-detail__item';
+		const k = document.createElement( 'em' );
+		k.textContent = key + ':';
+		const v = document.createElement( 'code' );
+		v.textContent = detail[ key ];
+		item.appendChild( k );
+		item.appendChild( v );
+		panel.appendChild( item );
+	} );
+	wrap.appendChild( panel );
+
+	btn.addEventListener( 'click', function () {
+		panel.hidden = ! panel.hidden;
+		btn.setAttribute( 'aria-expanded', String( ! panel.hidden ) );
+	} );
+
+	return wrap;
 }
 
 function fileStatusClass( row ) {
 	if ( 'infected' === row.status ) {
 		return ' is-infected';
 	}
-	return 'clean' !== row.status ? ' is-suspicious' : '';
-}
-
-function nodeHasProblems( node ) {
-	for ( let i = 0; i < node.files.length; i++ ) {
-		if ( 'clean' !== node.files[ i ].status ) {
-			return true;
-		}
+	if ( 'pending' === row.status ) {
+		return ' is-pending';
 	}
-	for ( const name in node.children ) {
-		if ( nodeHasProblems( node.children[ name ] ) ) {
-			return true;
-		}
-	}
-	return false;
+	return 'clean' !== row.status ? ' is-suspicious' : ' is-clean';
 }

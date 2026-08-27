@@ -29,10 +29,10 @@
         reveal ? CFG.i18n && CFG.i18n.hideKey || "Hide site key" : CFG.i18n && CFG.i18n.showKey || "Show site key"
       );
       if (iconOn) {
-        iconOn.hidden = reveal;
+        reveal ? iconOn.setAttribute("hidden", "") : iconOn.removeAttribute("hidden");
       }
       if (iconOff) {
-        iconOff.hidden = !reveal;
+        reveal ? iconOff.removeAttribute("hidden") : iconOff.setAttribute("hidden", "");
       }
     });
   }
@@ -136,6 +136,8 @@
   // wp-content/plugins/security-scanner/assets/js/src/dirTree.js
   var dirTreeEl = document.querySelector(".llar-dirtree");
   var treeFlags = {};
+  var registerRowRef = null;
+  var syncAllRef = null;
   if (dirTreeEl) {
     try {
       treeFlags = JSON.parse(dirTreeEl.getAttribute("data-flags") || "{}") || {};
@@ -289,8 +291,16 @@
           fetchJSON("security_scanner_dirchildren", { rel }).then(function(payload) {
             const children = payload && payload.data && payload.data.children || [];
             children.forEach(function(child) {
+              if (kids.querySelector(':scope > .llar-dirtree__node[data-rel="' + cssEscape(child.rel) + '"]')) {
+                return;
+              }
               const childRow = buildChildRow(child);
-              kids.appendChild(childRow);
+              const firstFile = kids.querySelector(":scope > .llar-tree__file");
+              if (firstFile) {
+                kids.insertBefore(childRow, firstFile);
+              } else {
+                kids.appendChild(childRow);
+              }
               registerRow(childRow);
             });
             syncAll();
@@ -306,6 +316,8 @@
     syncAll();
     syncHidden();
     updateStartGuard();
+    registerRowRef = registerRow;
+    syncAllRef = syncAll;
     return {
       /** @return {Object<string, boolean>} Explicit toggles (rel path => checked). */
       getFlags: function() {
@@ -321,55 +333,77 @@
       }
     };
   }
+  function materializeFolder(rel) {
+    if (!dirTreeEl) {
+      return null;
+    }
+    const root = dirTreeEl.querySelector('.llar-dirtree__node[data-rel=""]');
+    if (!root) {
+      return null;
+    }
+    if (!rel) {
+      return root;
+    }
+    const segs = rel.split("/");
+    let node = root;
+    let prefix = "";
+    for (let i = 0; i < segs.length; i++) {
+      const seg = segs[i];
+      prefix = prefix ? prefix + "/" + seg : seg;
+      const kids = node.lastElementChild && "UL" === node.lastElementChild.tagName ? node.lastElementChild : null;
+      if (!kids) {
+        return null;
+      }
+      let li = kids.querySelector(':scope > .llar-dirtree__node[data-rel="' + cssEscape(prefix) + '"]');
+      if (!li) {
+        li = buildSyntheticRow(prefix, seg, kids);
+      }
+      node = li;
+    }
+    return node;
+  }
+  function buildSyntheticRow(rel, name, kids) {
+    const li = document.createElement("li");
+    li.className = "llar-tree__folder llar-dirtree__node";
+    li.setAttribute("data-rel", rel);
+    const toggle = document.createElement("span");
+    toggle.className = "llar-tree__toggle";
+    toggle.textContent = "\u25B8";
+    li.appendChild(toggle);
+    const label = document.createElement("label");
+    label.className = "llar-dirtree__label inline-flex cursor-pointer items-center gap-2";
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.className = "rounded border-slate-300 text-primary-600 focus:ring-primary-500";
+    label.appendChild(input);
+    const nameEl = document.createElement("span");
+    nameEl.className = "llar-tree__folder-name";
+    nameEl.textContent = name + "/";
+    label.appendChild(nameEl);
+    li.appendChild(label);
+    const sub = document.createElement("ul");
+    sub.className = "llar-tree__list";
+    sub.hidden = true;
+    li.appendChild(sub);
+    const firstFile = kids.querySelector(":scope > .llar-tree__file");
+    if (firstFile) {
+      kids.insertBefore(li, firstFile);
+    } else {
+      kids.appendChild(li);
+    }
+    if (registerRowRef) {
+      registerRowRef(li);
+    }
+    if (syncAllRef) {
+      syncAllRef();
+    }
+    return li;
+  }
+  function cssEscape(value) {
+    return window.CSS && CSS.escape ? CSS.escape(value) : value.replace(/"/g, '\\"');
+  }
 
   // wp-content/plugins/security-scanner/assets/js/src/fileTree.js
-  function buildTree(rows) {
-    const root = { children: {}, files: [] };
-    rows.forEach(function(row) {
-      const parts = row.file_path.split("/");
-      let node = root;
-      for (let i = 0; i < parts.length - 1; i++) {
-        const seg = parts[i];
-        node.children[seg] = node.children[seg] || { children: {}, files: [] };
-        node = node.children[seg];
-      }
-      node.files.push(row);
-    });
-    return root;
-  }
-  function renderNode(node, prefix, isRoot) {
-    const ul = document.createElement("ul");
-    ul.className = "llar-tree__list" + (isRoot ? " is-root" : "");
-    Object.keys(node.children).sort().forEach(function(name) {
-      const child = node.children[name];
-      const path = prefix ? prefix + "/" + name : name;
-      const hasProblems = nodeHasProblems(child);
-      const li = document.createElement("li");
-      li.className = "llar-tree__folder";
-      const toggle = document.createElement("span");
-      toggle.className = "llar-tree__toggle";
-      toggle.textContent = hasProblems ? "\u25BE" : "\u25B8";
-      li.appendChild(toggle);
-      const label = document.createElement("span");
-      label.className = "llar-tree__folder-name" + (hasProblems ? " has-problems" : "");
-      label.textContent = path + "/";
-      li.appendChild(label);
-      const subtree = renderNode(child, path, false);
-      subtree.hidden = !hasProblems;
-      li.appendChild(subtree);
-      toggle.addEventListener("click", function() {
-        subtree.hidden = !subtree.hidden;
-        toggle.textContent = subtree.hidden ? "\u25B8" : "\u25BE";
-      });
-      ul.appendChild(li);
-    });
-    node.files.sort(function(a, b) {
-      return a.file_path < b.file_path ? -1 : 1;
-    }).forEach(function(row) {
-      ul.appendChild(renderFile(row));
-    });
-    return ul;
-  }
   function renderFile(row) {
     const li = document.createElement("li");
     li.className = "llar-tree__file" + fileStatusClass(row);
@@ -392,39 +426,198 @@
       t.textContent = row.threat_type;
       li.appendChild(t);
     }
+    if (row.detail && Object.keys(row.detail).length) {
+      li.appendChild(buildDetail(row.detail));
+    }
     return li;
+  }
+  function dirname(path) {
+    const idx = path.lastIndexOf("/");
+    return -1 === idx ? "" : path.slice(0, idx);
+  }
+  function buildDetail(detail) {
+    const wrap = document.createElement("span");
+    wrap.className = "llar-file-detail";
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "llar-file-detail__toggle";
+    btn.textContent = "\u24D8";
+    btn.title = "Imunify response";
+    btn.setAttribute("aria-expanded", "false");
+    wrap.appendChild(btn);
+    const panel = document.createElement("span");
+    panel.className = "llar-file-detail__panel";
+    panel.hidden = true;
+    Object.keys(detail).forEach(function(key) {
+      const item = document.createElement("span");
+      item.className = "llar-file-detail__item";
+      const k = document.createElement("em");
+      k.textContent = key + ":";
+      const v = document.createElement("code");
+      v.textContent = detail[key];
+      item.appendChild(k);
+      item.appendChild(v);
+      panel.appendChild(item);
+    });
+    wrap.appendChild(panel);
+    btn.addEventListener("click", function() {
+      panel.hidden = !panel.hidden;
+      btn.setAttribute("aria-expanded", String(!panel.hidden));
+    });
+    return wrap;
   }
   function fileStatusClass(row) {
     if ("infected" === row.status) {
       return " is-infected";
     }
-    return "clean" !== row.status ? " is-suspicious" : "";
+    if ("pending" === row.status) {
+      return " is-pending";
+    }
+    return "clean" !== row.status ? " is-suspicious" : " is-clean";
   }
-  function nodeHasProblems(node) {
-    for (let i = 0; i < node.files.length; i++) {
-      if ("clean" !== node.files[i].status) {
-        return true;
+
+  // wp-content/plugins/security-scanner/assets/js/src/results.js
+  var treeEl = document.querySelector(".llar-dirtree");
+  var filterWrap = document.getElementById("llar-only-suspicious-wrap");
+  var onlySuspicious = document.getElementById("llar-only-suspicious");
+  function loadResults(jobId) {
+    fetchJSON("security_scanner_results", { job_id: jobId }).then(function(payload) {
+      attachResults(payload && payload.data && payload.data.results || []);
+    }).catch(function() {
+    });
+  }
+  function clearResults() {
+    if (!treeEl) {
+      return;
+    }
+    treeEl.classList.remove("is-complete");
+    Array.prototype.forEach.call(treeEl.querySelectorAll(".llar-tree__file"), function(el) {
+      el.remove();
+    });
+    Array.prototype.forEach.call(treeEl.querySelectorAll(".llar-node-badge"), function(el) {
+      el.remove();
+    });
+    Array.prototype.forEach.call(treeEl.querySelectorAll(".llar-tree__folder-name.has-problems"), function(el) {
+      el.classList.remove("has-problems");
+    });
+    if (filterWrap) {
+      filterWrap.hidden = true;
+    }
+    window.__llarLastResults = [];
+  }
+  function attachResults(rows) {
+    if (!treeEl) {
+      return;
+    }
+    clearResults();
+    window.__llarLastResults = rows;
+    const stats = {};
+    rows.forEach(function(row) {
+      const dir = dirname(row.file_path);
+      const bad = "clean" !== row.status;
+      const infected = "infected" === row.status;
+      const folder = materializeFolder(dir);
+      if (folder) {
+        const kids = folder.lastElementChild;
+        if (kids && "UL" === kids.tagName) {
+          kids.appendChild(renderFile(row));
+        }
+      }
+      const segs = dir ? dir.split("/") : [];
+      for (let i = 0; i <= segs.length; i++) {
+        const rel = segs.slice(0, i).join("/");
+        stats[rel] = stats[rel] || { scanned: 0, alert: 0, infected: 0 };
+        ++stats[rel].scanned;
+        if (bad) {
+          ++stats[rel].alert;
+        }
+        if (infected) {
+          ++stats[rel].infected;
+        }
+      }
+    });
+    Object.keys(stats).forEach(function(rel) {
+      const folder = materializeFolder(rel);
+      if (!folder) {
+        return;
+      }
+      addBadge(folder, stats[rel]);
+      if (stats[rel].alert > 0) {
+        markProblems(folder);
+        expandChain(folder);
+      }
+    });
+    treeEl.classList.add("is-complete");
+    if (filterWrap && rows.length) {
+      filterWrap.hidden = false;
+    }
+    applyFilter();
+  }
+  function addBadge(folder, s) {
+    const kids = folder.lastElementChild;
+    if (!kids || "UL" !== kids.tagName) {
+      return;
+    }
+    const badge = document.createElement("span");
+    if (s.alert > 0) {
+      badge.className = "llar-node-badge llar-node-badge--alert" + (s.infected > 0 ? " llar-node-badge--infected" : "");
+      badge.textContent = "\u26A0 " + s.alert;
+      badge.title = s.alert + " suspicious/infected file(s) in this subtree";
+    } else {
+      badge.className = "llar-node-badge llar-node-badge--ok";
+      badge.textContent = "\u2713 " + s.scanned;
+      badge.title = s.scanned + " file(s) scanned, all clean";
+    }
+    folder.insertBefore(badge, kids);
+  }
+  function markProblems(folder) {
+    const name = folder.querySelector(":scope > .llar-dirtree__label .llar-tree__folder-name");
+    if (name) {
+      name.classList.add("has-problems");
+    }
+  }
+  function expandChain(folder) {
+    const kids = folder.lastElementChild;
+    if (kids && "UL" === kids.tagName) {
+      kids.hidden = false;
+      const ownToggle = folder.querySelector(":scope > .llar-tree__toggle");
+      if (ownToggle) {
+        ownToggle.textContent = "\u25BE";
       }
     }
-    for (const name in node.children) {
-      if (nodeHasProblems(node.children[name])) {
-        return true;
+    let el = folder;
+    while (el && el !== treeEl) {
+      if ("UL" === el.tagName && el.classList.contains("llar-tree__list")) {
+        el.hidden = false;
+        const owner = el.parentElement;
+        const toggle = owner && owner.querySelector(":scope > .llar-tree__toggle");
+        if (toggle) {
+          toggle.textContent = "\u25BE";
+        }
       }
+      el = el.parentElement;
     }
-    return false;
+  }
+  function applyFilter() {
+    if (!treeEl) {
+      return;
+    }
+    const hide = !onlySuspicious || onlySuspicious.checked;
+    Array.prototype.forEach.call(treeEl.querySelectorAll(".llar-tree__file"), function(el) {
+      el.hidden = hide && el.classList.contains("is-clean");
+    });
+  }
+  function initResultsFilter() {
+    if (onlySuspicious) {
+      onlySuspicious.addEventListener("change", applyFilter);
+    }
   }
 
   // wp-content/plugins/security-scanner/assets/js/src/preview.js
   function initPreview(treeApi2) {
-    const previewSection = document.querySelector(".llar-preview");
-    if (!previewSection) {
-      return { schedule: function() {
-      } };
-    }
-    const previewTree = previewSection.querySelector(".llar-preview__tree");
-    const previewCount = previewSection.querySelector(".llar-preview__count");
-    const previewEmpty = previewSection.querySelector(".llar-preview__empty");
-    const previewLoading = previewSection.querySelector(".llar-preview__loading");
+    const previewCount = document.querySelector(".llar-preview__count");
+    const previewEmpty = document.querySelector(".llar-preview__empty");
+    const previewLoading = document.querySelector(".llar-preview__loading");
     const includeInput = document.getElementById("llar-include");
     const excludeInput = document.getElementById("llar-exclude");
     const PREVIEW_DEBOUNCE_MS = 300;
@@ -441,14 +634,25 @@
       if (previewEmpty) {
         previewEmpty.hidden = files.length > 0;
       }
-      previewTree.innerHTML = "";
-      if (!files.length) {
-        return;
-      }
-      const rows = files.map(function(f) {
-        return { file_path: f, status: "clean" };
+      clearResults();
+      const byDir = {};
+      files.forEach(function(f) {
+        const dir = dirname(f);
+        (byDir[dir] = byDir[dir] || []).push(f);
       });
-      previewTree.appendChild(renderNode(buildTree(rows), "", true));
+      Object.keys(byDir).forEach(function(dir) {
+        const folder = materializeFolder(dir);
+        if (!folder) {
+          return;
+        }
+        const kids = folder.lastElementChild;
+        if (!kids || "UL" !== kids.tagName) {
+          return;
+        }
+        byDir[dir].forEach(function(f) {
+          kids.appendChild(renderFile({ file_path: f, status: "pending" }));
+        });
+      });
     }
     function loadPreview() {
       const seq = ++previewSeq;
@@ -519,58 +723,6 @@
     const h = Math.floor(seconds / 3600);
     const m = Math.round(seconds % 3600 / 60);
     return h + "h " + (m > 0 ? m + "m" : "");
-  }
-
-  // wp-content/plugins/security-scanner/assets/js/src/results.js
-  var resultsSection = document.querySelector(".llar-results");
-  var tree = resultsSection ? resultsSection.querySelector(".llar-tree") : null;
-  var onlySuspicious = document.getElementById("llar-only-suspicious");
-  function loadResults(jobId) {
-    fetchJSON("security_scanner_results", { job_id: jobId }).then(renderResults).catch(function() {
-      if (resultsSection) {
-        resultsSection.hidden = false;
-      }
-    });
-  }
-  function renderResults(payload) {
-    if (!resultsSection || !tree) {
-      return;
-    }
-    const rows = payload && payload.data && payload.data.results || [];
-    window.__llarLastResults = rows;
-    resultsSection.hidden = false;
-    tree.innerHTML = "";
-    const empty = resultsSection.querySelector(".llar-empty");
-    if (empty) {
-      empty.hidden = true;
-    }
-    if (!rows.length) {
-      if (empty) {
-        empty.hidden = false;
-      }
-      return;
-    }
-    const showAll = !onlySuspicious || !onlySuspicious.checked;
-    const visible = rows.filter(function(row) {
-      return showAll || row.status !== "clean";
-    });
-    if (!visible.length) {
-      if (empty) {
-        empty.hidden = false;
-      }
-      return;
-    }
-    const root = buildTree(visible);
-    tree.appendChild(renderNode(root, "", true));
-  }
-  function initResultsFilter() {
-    if (onlySuspicious) {
-      onlySuspicious.addEventListener("change", function() {
-        if (resultsSection && !resultsSection.hidden) {
-          renderResults({ data: { results: window.__llarLastResults || [] } });
-        }
-      });
-    }
   }
 
   // wp-content/plugins/security-scanner/assets/js/src/status.js

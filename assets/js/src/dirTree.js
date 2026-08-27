@@ -13,6 +13,10 @@ import { fetchJSON } from './ajax.js';
 
 const dirTreeEl = document.querySelector( '.llar-dirtree' );
 let treeFlags = {};
+// Wiring hooks set by initDirTree() so materializeFolder() can register
+// synthetic rows with the same cascade/lazy-load handlers (null until init).
+let registerRowRef = null;
+let syncAllRef = null;
 
 if ( dirTreeEl ) {
 	try {
@@ -212,8 +216,21 @@ export function initDirTree( onChange ) {
 				fetchJSON( 'security_scanner_dirchildren', { rel: rel } ).then( function ( payload ) {
 					const children = ( payload && payload.data && payload.data.children ) || [];
 					children.forEach( function ( child ) {
+						// Skip folders already present: the preview/results renderer
+						// may have materialised them as synthetic rows before this
+						// lazy load ran — re-adding them would duplicate the row.
+						if ( kids.querySelector( ':scope > .llar-dirtree__node[data-rel="' + cssEscape( child.rel ) + '"]' ) ) {
+							return;
+						}
 						const childRow = buildChildRow( child );
-						kids.appendChild( childRow );
+						// Folder rows stay above file rows already attached by the
+						// results renderer (unified tree).
+						const firstFile = kids.querySelector( ':scope > .llar-tree__file' );
+						if ( firstFile ) {
+							kids.insertBefore( childRow, firstFile );
+						} else {
+							kids.appendChild( childRow );
+						}
 						registerRow( childRow );
 					} );
 					syncAll();
@@ -231,21 +248,135 @@ export function initDirTree( onChange ) {
 	syncHidden();
 	updateStartGuard();
 
+	registerRowRef = registerRow;
+	syncAllRef = syncAll;
+
 	return {
 		/** @return {Object<string, boolean>} Explicit toggles (rel path => checked). */
 		getFlags: function () {
 			return treeFlags;
 		},
 		/** @return {string[]} Checked legacy slug checkboxes (no-JS fallback values). */
-		getSelectedSlugs: function () {
-			return Array.prototype.slice
-				.call( dirTreeEl.querySelectorAll( 'input[name="security_scanner_directories[]"]' ) )
-				.filter( function ( cb ) {
-					return cb.checked;
-				} )
-				.map( function ( cb ) {
-					return cb.value;
-				} );
-		},
-	};
-}
+			getSelectedSlugs: function () {
+				return Array.prototype.slice
+					.call( dirTreeEl.querySelectorAll( 'input[name="security_scanner_directories[]"]' ) )
+					.filter( function ( cb ) {
+						return cb.checked;
+					} )
+					.map( function ( cb ) {
+						return cb.value;
+					} );
+			},
+		};
+	}
+
+	/**
+	 * Ensures the folder chain for a relative path exists in the tree and returns
+	 * its <li>. Missing folders (deeper than the lazily loaded levels) are
+	 * created as synthetic rows with an unnamed checkbox and wired like regular
+	 * rows. Returns null when the tree is absent.
+	 *
+	 * @param {string} rel Relative directory path ('' = site root).
+	 * @return {Element|null}
+	 */
+	export function materializeFolder( rel ) {
+		if ( ! dirTreeEl ) {
+			return null;
+		}
+
+		const root = dirTreeEl.querySelector( '.llar-dirtree__node[data-rel=""]' );
+		if ( ! root ) {
+			return null;
+		}
+		if ( ! rel ) {
+			return root;
+		}
+
+		const segs = rel.split( '/' );
+		let node = root;
+		let prefix = '';
+
+		for ( let i = 0; i < segs.length; i++ ) {
+			const seg = segs[ i ];
+			prefix = prefix ? prefix + '/' + seg : seg;
+			const kids = node.lastElementChild && 'UL' === node.lastElementChild.tagName ? node.lastElementChild : null;
+			if ( ! kids ) {
+				return null;
+			}
+
+			let li = kids.querySelector( ':scope > .llar-dirtree__node[data-rel="' + cssEscape( prefix ) + '"]' );
+			if ( ! li ) {
+				li = buildSyntheticRow( prefix, seg, kids );
+			}
+			node = li;
+		}
+
+		return node;
+	}
+
+	/**
+	 * Creates and registers a folder row the tree has not loaded lazily yet.
+	 *
+	 * @param {string} rel   Relative path.
+	 * @param {string} name  Folder name segment.
+	 * @param {Element} kids Parent <ul> to append to.
+	 * @return {Element} The new <li>.
+	 */
+	function buildSyntheticRow( rel, name, kids ) {
+		const li = document.createElement( 'li' );
+		li.className = 'llar-tree__folder llar-dirtree__node';
+		li.setAttribute( 'data-rel', rel );
+
+		const toggle = document.createElement( 'span' );
+		toggle.className = 'llar-tree__toggle';
+		toggle.textContent = '▸';
+		li.appendChild( toggle );
+
+		const label = document.createElement( 'label' );
+		label.className = 'llar-dirtree__label inline-flex cursor-pointer items-center gap-2';
+
+		// No slug: the checkbox is cosmetic (JS-driven scope), matching the
+		// server-rendered rows whose folder is not a registered scan option.
+		const input = document.createElement( 'input' );
+		input.type = 'checkbox';
+		input.className = 'rounded border-slate-300 text-primary-600 focus:ring-primary-500';
+		label.appendChild( input );
+
+		const nameEl = document.createElement( 'span' );
+		nameEl.className = 'llar-tree__folder-name';
+		nameEl.textContent = name + '/';
+		label.appendChild( nameEl );
+
+		li.appendChild( label );
+
+		const sub = document.createElement( 'ul' );
+		sub.className = 'llar-tree__list';
+		sub.hidden = true;
+		li.appendChild( sub );
+
+		// Folder rows stay above any attached file rows.
+		const firstFile = kids.querySelector( ':scope > .llar-tree__file' );
+		if ( firstFile ) {
+			kids.insertBefore( li, firstFile );
+		} else {
+			kids.appendChild( li );
+		}
+
+		if ( registerRowRef ) {
+			registerRowRef( li );
+		}
+		if ( syncAllRef ) {
+			syncAllRef();
+		}
+		return li;
+	}
+
+	/**
+	 * Escapes a path segment for use in an attribute selector.
+	 *
+	 * @param {string} value Raw value.
+	 * @return {string}
+	 */
+	function cssEscape( value ) {
+		return window.CSS && CSS.escape ? CSS.escape( value ) : value.replace( /"/g, '\\"' );
+	}

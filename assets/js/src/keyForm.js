@@ -39,11 +39,14 @@ export function initKeyForm() {
 				? ( CFG.i18n && CFG.i18n.hideKey || 'Hide site key' )
 				: ( CFG.i18n && CFG.i18n.showKey || 'Show site key' )
 		);
+		// The icons are inline SVG: the `hidden` IDL property exists only on
+		// HTMLElement, so the attribute must be toggled explicitly (and the
+		// [hidden] rule for SVG is enforced in tailwind-src.css).
 		if ( iconOn ) {
-			iconOn.hidden = reveal;
+			reveal ? iconOn.setAttribute( 'hidden', '' ) : iconOn.removeAttribute( 'hidden' );
 		}
 		if ( iconOff ) {
-			iconOff.hidden = ! reveal;
+			reveal ? iconOff.removeAttribute( 'hidden' ) : iconOff.setAttribute( 'hidden', '' );
 		}
 	} );
 }

@@ -2,11 +2,17 @@
 /**
  * Admin page template.
  *
- * Styling is driven by Tailwind utilities (loaded via the Play CDN and scoped
- * to #security-scanner-app in AdminController::enqueue()). The handful of classes
- * kept without Tailwind counterparts (llar-status, llar-progress__*, llar-tree*,
- * llar-sev*) are required by assets/js/admin.js, which builds those nodes at
- * runtime and reads/writes them by class name.
+ * Styling is driven by Tailwind utilities (loaded via the pre-built stylesheet
+ * scoped to #security-scanner-app — see AdminController::enqueue()). The handful
+ * of classes kept without Tailwind counterparts (llar-status, llar-progress__*,
+ * llar-tree*, llar-node-badge, llar-sev*, llar-file-detail*) are required by
+ * assets/js/admin.js, which builds those nodes at runtime and reads/writes them
+ * by class name.
+ *
+ * The scan area is a unified tree: the directory selector carries the
+ * files-to-scan preview (pending rows under each selected folder), the live
+ * progress bar (while a job runs) and the per-folder results once it
+ * finishes.
  *
  * @package Llar\SecurityScanner\Views
  *
@@ -130,16 +136,43 @@ if ( ! defined( 'ABSPATH' ) ) {
 			</form>
 		</section>
 
-		<!-- Scan area -->
+		<!-- Scan area: directory selection + live progress + results (unified tree) -->
 		<section class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm <?php echo $has_key ? '' : 'pointer-events-none opacity-60'; ?>">
 			<h2 class="!m-0 !mb-4 !text-lg !font-semibold !text-slate-800"><?php esc_html_e( 'Scan area', 'security-scanner' ); ?></h2>
+
+			<!-- Scan status (revealed by admin.js once a job is active) -->
+			<div class="llar-status mb-4 rounded-lg bg-slate-50 p-4" hidden>
+				<div class="mb-2 flex items-center justify-between">
+					<span class="inline-flex items-center gap-1.5 rounded-full bg-primary-50 px-2.5 py-1 text-xs font-medium text-primary-700">
+						<span class="h-1.5 w-1.5 animate-pulse rounded-full bg-primary-500"></span>
+						<?php esc_html_e( 'Live', 'security-scanner' ); ?>
+					</span>
+					<span class="text-xs text-slate-500"><?php esc_html_e( 'Do not close this page until the scan completes.', 'security-scanner' ); ?></span>
+				</div>
+				<div class="llar-progress h-2.5 w-full overflow-hidden rounded-full bg-slate-100">
+					<div class="llar-progress__bar h-full rounded-full bg-gradient-to-r from-primary-500 to-primary-600 transition-[width] duration-500 ease-out" style="width:0%"></div>
+				</div>
+				<p class="llar-progress__label mt-2 break-all font-mono text-xs text-slate-600"><?php esc_html_e( 'Preparing…', 'security-scanner' ); ?></p>
+				<input type="hidden" class="llar-job-id" value="<?php echo esc_attr( $job_id ); ?>" />
+			</div>
 
 			<form method="post" action="" class="llar-start-form space-y-4">
 				<?php wp_nonce_field( 'security_scanner_start_scan' ); ?>
 				<input type="hidden" name="security_scanner_action" value="start_scan" />
 
 				<div>
-					<span class="mb-2 block text-sm font-medium text-slate-700"><?php esc_html_e( 'Directories', 'security-scanner' ); ?></span>
+					<div class="mb-2 flex flex-wrap items-center justify-between gap-2">
+						<span class="inline-flex items-baseline gap-2">
+							<span class="text-sm font-medium text-slate-700"><?php esc_html_e( 'Directories', 'security-scanner' ); ?></span>
+							<!-- Files-in-scope counter, filled by admin.js from the preview -->
+							<span class="llar-preview__count font-mono text-xs text-slate-500"></span>
+						</span>
+						<!-- Revealed by admin.js once results are attached to the tree -->
+						<label id="llar-only-suspicious-wrap" class="inline-flex cursor-pointer items-center gap-2 text-sm text-slate-600" hidden>
+							<input type="checkbox" id="llar-only-suspicious" checked class="rounded border-slate-300 text-primary-600 focus:ring-primary-500" />
+							<?php esc_html_e( 'Suspicious only', 'security-scanner' ); ?>
+						</label>
+					</div>
 					<p class="!m-0 !mb-2 text-xs text-slate-500"><?php esc_html_e( 'Checking a folder selects all its subfolders; unchecking a subfolder clears its parent.', 'security-scanner' ); ?></p>
 					<div
 						class="llar-tree llar-dirtree rounded-md border border-slate-200 bg-slate-50"
@@ -161,11 +194,11 @@ if ( ! defined( 'ABSPATH' ) ) {
 								<ul class="llar-tree__list" data-loaded="1">
 									<?php foreach ( $tree_rows as $row ) : ?>
 										<li class="llar-tree__folder llar-dirtree__node" data-rel="<?php echo esc_attr( $row['rel'] ); ?>">
-											<span class="llar-tree__toggle"><?php echo $row['has_children'] ? '▸' : ' '; ?></span>
+											<span class="llar-tree__toggle"><?php echo $row['has_children'] ? '▸' : ' '; ?></span>
 											<label class="llar-dirtree__label inline-flex cursor-pointer items-center gap-2">
 												<?php if ( '' !== $row['slug'] ) : ?>
 													<input
-														type="checkbox"
+															type="checkbox"
 														name="security_scanner_directories[]"
 														value="<?php echo esc_attr( $row['slug'] ); ?>"
 														class="rounded border-slate-300 text-primary-600 focus:ring-primary-500"
@@ -184,11 +217,13 @@ if ( ! defined( 'ABSPATH' ) ) {
 										</li>
 									<?php endforeach; ?>
 								</ul>
-							</li>
-						</ul>
-						<div class="llar-tree-flags" hidden></div>
+								</li>
+							</ul>
+							<div class="llar-tree-flags" hidden></div>
+						</div>
+						<p class="llar-preview__loading !m-0 !mt-2 text-xs text-slate-500"><?php esc_html_e( 'Loading…', 'security-scanner' ); ?></p>
+						<p class="llar-preview__empty !m-0 !mt-2 text-xs text-slate-500" hidden><?php esc_html_e( 'No files match the current settings.', 'security-scanner' ); ?></p>
 					</div>
-				</div>
 
 				<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
 					<div>
@@ -240,46 +275,5 @@ if ( ! defined( 'ABSPATH' ) ) {
 			<?php endif; ?>
 		</section>
 
-		<!-- File tree preview: what the current form selections would scan -->
-		<section class="llar-preview rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-			<div class="mb-3 flex items-center justify-between">
-				<h2 class="!m-0 !text-lg !font-semibold !text-slate-800"><?php esc_html_e( 'Files to scan', 'security-scanner' ); ?></h2>
-				<span class="llar-preview__count text-xs text-slate-500"></span>
-			</div>
-			<ul class="llar-tree llar-preview__tree"></ul>
-			<p class="llar-preview__loading text-sm text-slate-500"><?php esc_html_e( 'Loading…', 'security-scanner' ); ?></p>
-			<p class="llar-preview__empty text-sm text-slate-500" hidden><?php esc_html_e( 'No files match the current settings.', 'security-scanner' ); ?></p>
-		</section>
-
-		<!-- Scan status (revealed by admin.js once a job is active) -->
-		<section class="llar-status rounded-xl border border-slate-200 bg-white p-6 shadow-sm" hidden>
-			<div class="mb-3 flex items-center justify-between">
-				<h2 class="!m-0 !text-lg !font-semibold !text-slate-800"><?php esc_html_e( 'Scan in progress', 'security-scanner' ); ?></h2>
-				<span class="inline-flex items-center gap-1.5 rounded-full bg-primary-50 px-2.5 py-1 text-xs font-medium text-primary-700">
-					<span class="h-1.5 w-1.5 animate-pulse rounded-full bg-primary-500"></span>
-					<?php esc_html_e( 'Live', 'security-scanner' ); ?>
-				</span>
-			</div>
-			<p class="mb-3 text-sm text-slate-500"><?php esc_html_e( 'Do not close this page until the scan completes.', 'security-scanner' ); ?></p>
-			<div class="llar-progress h-2.5 w-full overflow-hidden rounded-full bg-slate-100">
-				<div class="llar-progress__bar h-full rounded-full bg-gradient-to-r from-primary-500 to-primary-600 transition-[width] duration-500 ease-out" style="width:0%"></div>
-			</div>
-			<p class="llar-progress__label mt-2 break-all font-mono text-xs text-slate-600"><?php esc_html_e( 'Preparing…', 'security-scanner' ); ?></p>
-			<input type="hidden" class="llar-job-id" value="<?php echo esc_attr( $job_id ); ?>" />
-		</section>
-
-		<!-- Results (revealed by admin.js after the scan completes) -->
-		<section class="llar-results rounded-xl border border-slate-200 bg-white p-6 shadow-sm" hidden>
-			<div class="mb-4 flex items-center justify-between">
-				<h2 class="!m-0 !text-lg !font-semibold !text-slate-800"><?php esc_html_e( 'Results', 'security-scanner' ); ?></h2>
-				<label class="inline-flex cursor-pointer items-center gap-2 text-sm text-slate-600">
-					<input type="checkbox" id="llar-only-suspicious" checked class="rounded border-slate-300 text-primary-600 focus:ring-primary-500" />
-					<?php esc_html_e( 'Suspicious only', 'security-scanner' ); ?>
-				</label>
-			</div>
-			<ul class="llar-tree"></ul>
-			<p class="llar-empty text-sm text-slate-500" hidden><?php esc_html_e( 'No files to show.', 'security-scanner' ); ?></p>
-		</section>
-
-	</div>
+</div>
 </div>

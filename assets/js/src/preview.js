@@ -1,27 +1,25 @@
 /**
- * Files-to-scan preview: renders the scan scope on page load and refreshes
- * it (debounced) whenever the directory tree or the mask inputs change, so
- * the scope is visible before a job is started — not only afterwards as
- * scan results.
+ * Files-to-scan preview, attached to the unified directory tree: renders the
+ * scan scope as per-file "pending" rows under their folders and refreshes
+ * (debounced) whenever the directory tree or the mask inputs change, so the
+ * scope is visible before a job is started — not only afterwards as scan
+ * results. A refresh clears previous scan results first: their marks would
+ * no longer describe the edited scope.
  */
 import { CFG } from './config.js';
 import { fetchJSON } from './ajax.js';
-import { buildTree, renderNode } from './fileTree.js';
+import { renderFile, dirname } from './fileTree.js';
+import { materializeFolder } from './dirTree.js';
+import { clearResults } from './results.js';
 
 /**
  * @param {{getFlags: Function, getSelectedSlugs: Function}} treeApi Directory-tree state readers.
  * @return {{schedule: Function}} Debounced refresh trigger.
  */
 export function initPreview( treeApi ) {
-	const previewSection = document.querySelector( '.llar-preview' );
-	if ( ! previewSection ) {
-		return { schedule: function () {} };
-	}
-
-	const previewTree    = previewSection.querySelector( '.llar-preview__tree' );
-	const previewCount   = previewSection.querySelector( '.llar-preview__count' );
-	const previewEmpty   = previewSection.querySelector( '.llar-preview__empty' );
-	const previewLoading = previewSection.querySelector( '.llar-preview__loading' );
+	const previewCount   = document.querySelector( '.llar-preview__count' );
+	const previewEmpty   = document.querySelector( '.llar-preview__empty' );
+	const previewLoading = document.querySelector( '.llar-preview__loading' );
 	const includeInput   = document.getElementById( 'llar-include' );
 	const excludeInput   = document.getElementById( 'llar-exclude' );
 	const PREVIEW_DEBOUNCE_MS = 300;
@@ -46,16 +44,29 @@ export function initPreview( treeApi ) {
 			previewEmpty.hidden = files.length > 0;
 		}
 
-		previewTree.innerHTML = '';
-		if ( ! files.length ) {
-			return;
-		}
+		clearResults();
 
-		// Preview rows carry no verdicts: render them as plain (clean) nodes.
-		const rows = files.map( function ( f ) {
-			return { file_path: f, status: 'clean' };
+		// Group by folder first so each folder is materialised (and its
+		// <ul> resolved) exactly once, then append its file rows.
+		const byDir = {};
+		files.forEach( function ( f ) {
+			const dir = dirname( f );
+			( byDir[ dir ] = byDir[ dir ] || [] ).push( f );
 		} );
-		previewTree.appendChild( renderNode( buildTree( rows ), '', true ) );
+
+		Object.keys( byDir ).forEach( function ( dir ) {
+			const folder = materializeFolder( dir );
+			if ( ! folder ) {
+				return;
+			}
+			const kids = folder.lastElementChild;
+			if ( ! kids || 'UL' !== kids.tagName ) {
+				return;
+			}
+			byDir[ dir ].forEach( function ( f ) {
+				kids.appendChild( renderFile( { file_path: f, status: 'pending' } ) );
+			} );
+		} );
 	}
 
 	function loadPreview() {

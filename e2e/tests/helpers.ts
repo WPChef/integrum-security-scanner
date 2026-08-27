@@ -481,15 +481,15 @@ export async function getPageScrollY(page: Page): Promise<number> {
  */
 export async function waitForScanCompletion(page: Page): Promise<'completed' | 'failed' | 'timeout'> {
   try {
-    // The JS poller hides the status section and reveals the results section
-    // when the scan finishes, so wait for .llar-results to become visible.
-    // (The progress label is set to a percentage string, not the word
-    // "completed", so we cannot match on its text.)
-    await page.locator('.llar-results').waitFor({ state: 'visible', timeout: 180_000 });
+    // The JS poller attaches the per-file verdicts to the directory tree when
+    // the scan finishes, marking it with .is-complete. (The progress label is
+    // set to a percentage string, not the word "completed", so we cannot match
+    // on its text.)
+    await page.locator('.llar-dirtree.is-complete').waitFor({ state: 'visible', timeout: 180_000 });
 
     // Distinguish completed vs failed by checking for an error label in the
-    // (now-hidden) status section. If the results section is visible without
-    // an error marker, treat it as completed.
+    // status block. If the tree is complete without an error marker, treat it
+    // as completed.
     const errorLabel = page.locator('.llar-progress__label').filter({ hasText: /failed|error/i });
     if (await errorLabel.count() > 0) {
       return 'failed';
@@ -505,13 +505,15 @@ export async function waitForScanCompletion(page: Page): Promise<'completed' | '
 // ---------------------------------------------------------------------------
 
 /**
- * Returns the number of files visible in the results tree.
+ * Returns the number of VISIBLE file rows attached to the directory tree.
  *
- * Scoped to .llar-results: the page also renders a files-to-scan preview
- * tree that reuses the same .llar-tree__file classes.
+ * Scoped to .llar-dirtree: the page also renders a files-to-scan preview
+ * tree that reuses the same .llar-tree__file classes. Hidden rows (clean
+ * files under the "suspicious only" filter) are not counted, so filter
+ * assertions observe the actual UI state.
  */
 export async function countVisibleFiles(page: Page): Promise<number> {
-  return page.locator('.llar-results .llar-tree__file').count();
+  return page.locator('.llar-dirtree .llar-tree__file:visible').count();
 }
 
 /**
