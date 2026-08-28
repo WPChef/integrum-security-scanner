@@ -1,9 +1,0 @@
-# Prevent direct download of mock state if this directory is ever under a web root.
-<Files "state.json">
-	<IfModule mod_authz_core.c>
-		Require all denied
-	</IfModule>
-	<IfModule !mod_authz_core.c>
-		Deny from all
-	</IfModule>
-</Files>
