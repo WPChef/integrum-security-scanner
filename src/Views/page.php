@@ -156,6 +156,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 				<input type="hidden" class="llar-job-id" value="<?php echo esc_attr( $job_id ); ?>" />
 			</div>
 
+			<!-- Scan completion summary (revealed and filled by admin.js when the job finishes) -->
+			<div class="llar-scan-summary mb-4 rounded-lg border px-4 py-3 text-sm" role="status" hidden></div>
+
 			<form method="post" action="" class="llar-start-form space-y-4">
 				<?php wp_nonce_field( 'security_scanner_start_scan' ); ?>
 				<input type="hidden" name="security_scanner_action" value="start_scan" />

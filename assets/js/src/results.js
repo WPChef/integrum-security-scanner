@@ -15,15 +15,22 @@ const onlySuspicious = document.getElementById( 'llar-only-suspicious' );
 
 /**
  * Fetches the verdicts for a finished job and attaches them to the tree.
+ * Resolves with the result rows (empty on failure) so the caller can build
+ * its own completion summary from the counts.
  *
  * @param {string} jobId Job id.
+ * @return {Promise<Array<{file_path: string, status: string}>>}
  */
 export function loadResults( jobId ) {
-	fetchJSON( 'security_scanner_results', { job_id: jobId } )
+	return fetchJSON( 'security_scanner_results', { job_id: jobId } )
 		.then( function ( payload ) {
-			attachResults( ( payload && payload.data && payload.data.results ) || [] );
+			const rows = ( payload && payload.data && payload.data.results ) || [];
+			attachResults( rows );
+			return rows;
 		} )
-		.catch( function () {} );
+		.catch( function () {
+			return [];
+		} );
 }
 
 /**
@@ -188,14 +195,31 @@ function expandChain( folder ) {
 /**
  * Applies the "suspicious only" filter to the attached result rows.
  * Pending (not yet scanned) preview rows are never hidden by it.
+ *
+ * When the filter is switched off, the folders holding result rows are
+ * expanded: most of them are collapsed after the scan (only folders with
+ * findings auto-expand), so without this the clean files would stay
+ * invisible and the checkbox would look like a no-op.
  */
 export function applyFilter() {
 	if ( ! treeEl ) {
 		return;
 	}
 	const hide = ! onlySuspicious || onlySuspicious.checked;
+	const folders = [];
 	Array.prototype.forEach.call( treeEl.querySelectorAll( '.llar-tree__file' ), function ( el ) {
 		el.hidden = hide && el.classList.contains( 'is-clean' );
+		if ( ! hide ) {
+			const list = el.parentElement;
+			if ( list && 'UL' === list.tagName && folders.indexOf( list ) === -1 ) {
+				folders.push( list );
+			}
+		}
+	} );
+	folders.forEach( function ( list ) {
+		if ( list.parentElement ) {
+			expandChain( list.parentElement );
+		}
 	} );
 }
 

@@ -481,9 +481,12 @@
   var filterWrap = document.getElementById("llar-only-suspicious-wrap");
   var onlySuspicious = document.getElementById("llar-only-suspicious");
   function loadResults(jobId) {
-    fetchJSON("security_scanner_results", { job_id: jobId }).then(function(payload) {
-      attachResults(payload && payload.data && payload.data.results || []);
+    return fetchJSON("security_scanner_results", { job_id: jobId }).then(function(payload) {
+      const rows = payload && payload.data && payload.data.results || [];
+      attachResults(rows);
+      return rows;
     }).catch(function() {
+      return [];
     });
   }
   function clearResults() {
@@ -603,8 +606,20 @@
       return;
     }
     const hide = !onlySuspicious || onlySuspicious.checked;
+    const folders = [];
     Array.prototype.forEach.call(treeEl.querySelectorAll(".llar-tree__file"), function(el) {
       el.hidden = hide && el.classList.contains("is-clean");
+      if (!hide) {
+        const list = el.parentElement;
+        if (list && "UL" === list.tagName && folders.indexOf(list) === -1) {
+          folders.push(list);
+        }
+      }
+    });
+    folders.forEach(function(list) {
+      if (list.parentElement) {
+        expandChain(list.parentElement);
+      }
     });
   }
   function initResultsFilter() {
@@ -806,7 +821,44 @@
       if (startBtn) {
         startBtn.disabled = false;
       }
-      loadResults(jobId);
+      hideScanNotice(statusSection);
+      loadResults(jobId).then(function(rows) {
+        showSummary(statusSection, status, rows);
+      });
+    }
+    function hideScanNotice(statusSection2) {
+      const section = statusSection2.closest("section");
+      if (!section) {
+        return;
+      }
+      Array.prototype.forEach.call(
+        section.querySelectorAll(".security-scanner-notice"),
+        function(notice) {
+          notice.hidden = true;
+        }
+      );
+    }
+    function showSummary(statusSection2, status, rows) {
+      const summary = statusSection2.parentElement ? statusSection2.parentElement.querySelector(".llar-scan-summary") : null;
+      if (!summary) {
+        return;
+      }
+      const i18n = CFG.i18n || {};
+      let text;
+      let skin;
+      if ("failed" === status) {
+        text = i18n.scanFailed || "Scan failed.";
+        skin = "llar-scan-summary--failed";
+      } else {
+        const suspicious = rows.filter(function(row) {
+          return row.status && "clean" !== row.status;
+        }).length;
+        text = (i18n.scanCompleted || "Scan completed: {scanned} files scanned, {suspicious} suspicious.").replace("{scanned}", String(rows.length)).replace("{suspicious}", String(suspicious));
+        skin = suspicious > 0 ? "llar-scan-summary--findings" : "llar-scan-summary--clean";
+      }
+      summary.textContent = text;
+      summary.className = "llar-scan-summary mb-4 rounded-lg border px-4 py-3 text-sm " + skin;
+      summary.hidden = false;
     }
     pollStatus();
   }

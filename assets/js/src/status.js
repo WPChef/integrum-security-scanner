@@ -136,7 +136,69 @@ export function initPolling( jobId ) {
 		if ( startBtn ) {
 			startBtn.disabled = false;
 		}
-		loadResults( jobId );
+		hideScanNotice( statusSection );
+		loadResults( jobId ).then( function ( rows ) {
+			showSummary( statusSection, status, rows );
+		} );
+	}
+
+	/**
+	 * Hides the server-rendered "Scan started…" notice: it tells the user not
+	 * to close the page, which is obsolete advice once the job has finished.
+	 *
+	 * @param {Element} statusSection Progress section (scopes the lookup to
+	 *                                 the scan card, leaving the connection
+	 *                                 section's notices alone).
+	 */
+	function hideScanNotice( statusSection ) {
+		const section = statusSection.closest( 'section' );
+		if ( ! section ) {
+			return;
+		}
+		Array.prototype.forEach.call(
+			section.querySelectorAll( '.security-scanner-notice' ),
+			function ( notice ) {
+				notice.hidden = true;
+			}
+		);
+	}
+
+	/**
+	 * Reveals the completion summary in place of the progress block: without
+	 * it the scan ends silently and the user has no explicit "finished"
+	 * signal.
+	 *
+	 * @param {Element} statusSection Progress section.
+	 * @param {string}  status       Final job status ('completed' or 'failed').
+	 * @param {Array<{file_path: string, status: string}>} rows Result rows.
+	 */
+	function showSummary( statusSection, status, rows ) {
+		const summary = statusSection.parentElement
+			? statusSection.parentElement.querySelector( '.llar-scan-summary' )
+			: null;
+		if ( ! summary ) {
+			return;
+		}
+
+		const i18n = CFG.i18n || {};
+		let text;
+		let skin;
+		if ( 'failed' === status ) {
+			text = i18n.scanFailed || 'Scan failed.';
+			skin = 'llar-scan-summary--failed';
+		} else {
+			const suspicious = rows.filter( function ( row ) {
+				return row.status && 'clean' !== row.status;
+			} ).length;
+			text = ( i18n.scanCompleted || 'Scan completed: {scanned} files scanned, {suspicious} suspicious.' )
+				.replace( '{scanned}', String( rows.length ) )
+				.replace( '{suspicious}', String( suspicious ) );
+			skin = suspicious > 0 ? 'llar-scan-summary--findings' : 'llar-scan-summary--clean';
+		}
+
+		summary.textContent = text;
+		summary.className = 'llar-scan-summary mb-4 rounded-lg border px-4 py-3 text-sm ' + skin;
+		summary.hidden = false;
 	}
 
 	pollStatus();
