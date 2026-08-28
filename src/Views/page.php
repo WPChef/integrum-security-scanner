@@ -121,10 +121,42 @@ if ( ! defined( 'ABSPATH' ) ) {
 					</div>
 				</div>
 
+				<div id="llar-terms-row" class="md:col-span-2" <?php echo $has_key ? 'hidden' : ''; ?>>
+					<label class="flex cursor-pointer items-start gap-2.5">
+						<input
+							type="checkbox"
+							id="llar-terms-agree"
+							name="security_scanner_terms"
+							value="1"
+							class="mt-0.5 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+							<?php echo $has_key ? '' : 'required'; ?>
+						/>
+						<span class="text-sm leading-relaxed text-slate-600">
+							<?php esc_html_e( 'I agree to the', 'security-scanner' ); ?>
+							<button
+								type="button"
+								class="llar-terms-open cursor-pointer border-0 bg-transparent p-0 text-inherit underline decoration-dotted underline-offset-2 hover:text-slate-800"
+							><?php esc_html_e( 'Limit Login Attempts Reloaded Terms of Service and Malware Scanning Terms', 'security-scanner' ); ?></button><?php
+							printf(
+								wp_kses(
+									/* translators: 1: Privacy Policy label, 2: Imunify partner. */
+									__( ', and acknowledge the %1$s. Malware scanning is provided by Limit Login Attempts Reloaded in partnership with %2$s', 'security-scanner' ),
+									array( 'strong' => array() )
+								),
+								'<strong>' . esc_html__( 'Privacy Policy', 'security-scanner' ) . '</strong>',
+								'<strong>' . esc_html__( 'Imunify by CloudLinux.', 'security-scanner' ) . '</strong>'
+							);
+							?>
+						</span>
+					</label>
+				</div>
+
 				<div class="md:col-span-2">
 					<button
 						type="submit"
+						id="llar-key-submit"
 						class="inline-flex items-center gap-2 rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500/40 disabled:cursor-not-allowed disabled:opacity-60"
+						<?php disabled( ! $has_key ); ?>
 					>
 						<?php $has_key ? esc_html_e( 'Save key', 'security-scanner' ) : esc_html_e( 'Register', 'security-scanner' ); ?>
 					</button>
@@ -134,6 +166,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 					<?php require LLAR_SECURITY_SCANNER_DIR . 'src/Views/notice.php'; ?>
 				<?php endif; ?>
 			</form>
+
+			<?php require LLAR_SECURITY_SCANNER_DIR . 'src/Views/terms-modal.php'; ?>
 		</section>
 
 		<!-- Scan area: directory selection + live progress + results (unified tree) -->

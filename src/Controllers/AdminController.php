@@ -206,6 +206,18 @@ final class AdminController {
 			return;
 		}
 
+		$terms_accepted = isset( $_POST['security_scanner_terms'] ) && '1' === sanitize_text_field( wp_unslash( $_POST['security_scanner_terms'] ) );
+		if ( ! $terms_accepted ) {
+			$this->redirect(
+				array(
+					'type'    => 'error',
+					'message' => __( 'You must agree to the Terms of Service and Malware Scanning Terms before registering.', 'security-scanner' ),
+					'scope'   => 'connection',
+				)
+			);
+			return;
+		}
+
 		$domain = (string) apply_filters( 'security_scanner_site_domain', '' );
 		$email  = isset( $_POST['security_scanner_email'] ) ? sanitize_email( wp_unslash( $_POST['security_scanner_email'] ) ) : '';
 
