@@ -6,25 +6,51 @@
 
 ## Sandbox
 
-Окружение: DDEV (`https://llar-imunify.ddev.site`), mock-сервер на `127.0.0.1:9000`.
+Два окружения, один и тот же сюит:
+
+- **docker (основной)**: `docker compose up -d db wordpress mock setup` — свой стек
+  (MariaDB 11 + wordpress:php8.2-apache + отдельный mock-сервис), без DDEV.
+  Фикстуры смонтированы в `/var/www/html/e2e-fixtures`, плагин — bind-mount из
+  `wp-content/plugins/security-scanner`. Прогон: `docker compose run --rm --no-deps e2e`.
+  Хост-доступ для ручной отладки: `http://localhost:${WP_PORT}` (в `/etc/hosts`
+  добавьте `127.0.0.1 wordpress`, т.к. siteurl = `http://wordpress`).
+- **DDEV (альтернатива)**: `https://llar-imunify.ddev.site`, mock на `127.0.0.1:9000`
+  (`php -S 127.0.0.1:9000 -t e2e/mock e2e/mock/server.php`).
 
 Mock включается опцией `security_scanner_e2e_mock` (mu-plugin перенаправляет вызовы
-LLAR/Scanner API на mock-сервер) — правки `wp-config.php` не нужны:
+LLAR/Scanner API на mock-сервер); в docker работает и без опции — базовый URL
+задан константой `E2E_MOCK_URL_DEFAULT` в wp-config:
 
 ```
-curl -sk "https://llar-imunify.ddev.site/test-helper.php?action=enable-mock"   # включить mock
-curl -sk "https://llar-imunify.ddev.site/test-helper.php?action=disable-mock"  # вернуть реальный API
-curl -s -X POST http://127.0.0.1:9000/reset                                    # сброс состояния mock
+curl -s "http://<host>/test-helper.php?action=enable-mock"    # включить mock (DDEV)
+curl -s "http://<host>/test-helper.php?action=disable-mock"   # вернуть реальный API
+curl -s -X POST http://<mock-host>:9000/reset                   # сброс состояния mock
 ```
 
-Прочие действия `test-helper.php`: `cleanup` (сброс настроек/транзиентов плагина),
-`import-has-key` / `import-no-key` (дампы), `create-test-dir` (тест-директория
-`e2e-test-scan-dir` с 3 файлами), `get-site-key`, `set-key-<key>`, `reset-mock`.
+Состояние сайта меняется через PHP (`test-helper.php`), без SQL-дампов:
+
+- `state-no-key` / `state-has-key` — сброс + активация плагина (прямая запись в
+  `active_plugins`), для `has-key` — валидный ключ, синхронизированный в mock;
+  попутно сбрасывается и mock (регистратор отвергает дубликаты доменов).
+- `register-scan-dir-{small|site|akismet|malware}` — материализует фикстуру из
+  `e2e/fixtures` как реальную папку `e2e-test-scan-dir` в корне сайта (слаг
+  `e2e-test` в дереве директорий):
+  - `small` — 3 файла (clean / malicious / suspicious — точные счётчики вердиктов);
+  - `site` — корпус akismet (~48 файлов) + подпапка `malware/` с 7 опасными файлами
+    (5 malicious по имени: `*virus*`, `*malicious*`; 2 suspicious);
+  - `akismet` — только чистый корпус, без опасных файлов;
+  - `malware` — только опасные файлы.
+- `get-debug-log` — дамп `wp-content/debug.log` (первая строка `CAPTURE=on|off`);
+  mu-plugin php-error-capture пишет туда все PHP warnings/notices — каждый тест
+  в конце проверяет лог на отсутствие ошибок (`expectNoPhpErrors`).
+- `seed-php-warning` — искусственный warning для самотеста пайплайна захвата.
+- Прочие: `cleanup`, `get-site-key`, `set-key-<key>`, `reset-mock`, `provision`.
 
 Состояние mock хранится в `e2e/mock/state.json` — его можно удалить вручную для полного сброса.
 
-Автоматизированные сценарии (S1, S2, S4, S6, S16–S23) живут в `e2e/tests/imunify.spec.ts`
-(Playwright); остальные описаны для ручной проверки.
+Автоматизированные сценарии (S1, S2, S4, S6, S16–S26 + самотест захвата PHP-ошибок)
+живут в `e2e/tests/imunify.spec.ts` и `e2e/tests/php-error-capture.spec.ts` (Playwright);
+остальные описаны для ручной проверки.
 
 ---
 
@@ -38,7 +64,7 @@ curl -s -X POST http://127.0.0.1:9000/reset                                    #
 
 1. Открыть страницу плагина (`/wp-admin/admin.php?page=security-scanner`).
 2. Ввести email, нажать «Register» (`POST /imunify/site`).
-3. **Проверка**: notice «Site registered. Plan: free.», отображается Site ID.
+3. **Проверка**: notice «Site registered. Plan: free.», отображается Site ID, ключ предзаполнен в поле «Site key», замаскирован звёздочками.
 4. В дереве директорий всё по умолчанию: корень «/» (root), wp-admin, wp-includes,
    wp-content отмечены; маски пустые. Секция «Files to scan» уже показывает превью
    дерева файлов до запуска скана.
@@ -55,6 +81,12 @@ curl -s -X POST http://127.0.0.1:9000/reset                                    #
 - `file_index % 3 == 2` → suspicious (OBFUSCATED_EVAL)
 - `file_index % 3 == 0` → clean
 
+**Переопределение по имени** (приоритет над `file_index % 3`, без учёта регистра, подстрока в пути):
+- `virus` или `malicious` → malicious (EICAR_TEST_FILE), полный цикл `needs_sha256` → `needs_upload` → вердикт
+- `suspicious` (и опечатка `suspisious`) → suspicious (OBFUSCATED_EVAL), вердикт сразу
+
+Удобно для детерминированного детекта: создайте файлы вида `wp-content/virus-test.php`, `wp-content/malicious-dropper.php`, `wp-content/suspicious-note.php`.
+
 **Файлы для проверки**: любые `.php`-файлы в корне WordPress (например `index.php`, `wp-config.php`, `wp-load.php`).
 
 ---
@@ -69,9 +101,9 @@ curl -s -X POST http://127.0.0.1:9000/reset                                    #
 
 1. Открыть страницу плагина.
 2. Отправить форму ключа повторно (кнопка «Register»/«Save key»).
-3. **Проверка**: красный notice «This site is already registered. Try retrieving a new key or contact support.»
+3. **Проверка**: красный notice с текстом ошибки от API как есть (мок: «Site already registered.») + подсказка «Paste the site key in the field below and save it manually.»
 4. **Проверка**: плагин не упал, форма доступна для повторного действия.
-5. **Проверка**: в `wp-content/debug.log` есть запись `site registration bad response` с `code: 400`.
+5. **Проверка**: в `wp-content/debug.log` есть http-запись `http <- POST .../imunify/site [400]` с телом ответа API.
 
 ---
 
@@ -316,7 +348,7 @@ wp option patch update security_scanner_credentials site_key 'deadbeef'
 
 **Шаги**:
 
-1. Импортировать дамп `has-key`, создать тест-директорию, открыть страницу плагина.
+1. Применить состояние `has-key`, создать тест-директорию (`register-scan-dir-small`), открыть страницу плагина.
 2. Снять галочку с корня «/» (каскадом снимутся все подпапки), отметить только `e2e-test`;
    маски: include `*.php`, exclude `*/cache/*`.
 3. Запустить скан (настройки сохраняются при сабмите формы — до старта job).
@@ -332,9 +364,10 @@ wp option patch update security_scanner_credentials site_key 'deadbeef'
 
 **Шаги**:
 
-1. Импортировать дамп `no-key`, открыть страницу плагина.
+1. Применить состояние `no-key`, открыть страницу плагина.
 2. Вставить произвольный ключ в поле «Site key», отправить форму.
-3. **Проверка**: success-notice; после reload ключ остался в поле.
+3. **Проверка**: success-notice; после reload ключ остался в поле, замаскирован звёздочками.
+4. Кликнуть иконку «глаз» — **проверка**: ключ отображается открытым текстом; повторный клик — снова замаскирован.
 
 ---
 
@@ -356,7 +389,7 @@ wp option patch update security_scanner_credentials site_key 'deadbeef'
 
 **Шаги**:
 
-1. Импортировать дамп `has-key` (плагин активен).
+1. Применить состояние `has-key` (плагин активен).
 2. Открыть `plugins.php`, нажать «Deactivate» в строке плагина.
 3. **Проверка**: в строке снова есть действие «Activate».
 4. Зайти в `/wp-admin/index.php`.
@@ -376,7 +409,7 @@ wp option patch update security_scanner_credentials site_key 'deadbeef'
 
 **Шаги**:
 
-1. Импортировать дамп `has-key`, деактивировать плагин через UI (предусловие).
+1. Применить состояние `has-key`, деактивировать плагин через UI (предусловие).
 2. Нажать «Activate» в строке плагина.
 3. **Проверка**: в строке появилось действие «Deactivate»; нет инлайн-ошибки «could not be activated because it triggered a fatal error».
 4. Зайти на `/wp-admin/index.php`.
@@ -390,12 +423,12 @@ wp option patch update security_scanner_credentials site_key 'deadbeef'
 
 **Шаги**:
 
-1. Импортировать дамп `has-key`, создать тест-директорию, открыть страницу плагина.
+1. Применить состояние `has-key`, зарегистрировать тест-директорию (`register-scan-dir-small`), открыть страницу плагина.
 2. **Проверка**: чекбоксы root, wp-admin, wp-includes, wp-content отмечены (до первого сохранения настроек).
 3. **Проверка**: секция «Files to scan» видима; после загрузки в дереве есть узлы (папки/файлы), счётчик показывает «N files».
 4. Выбрать только `e2e-test` (снять стандартные директории).
 5. **Проверка**: превью перерисовалось — ровно 3 файла тест-директории, счётчик «3 files».
-6. Ввести include-маску `test-0.php`.
+6. Ввести include-маску `test-clean.php`.
 7. **Проверка**: превью сузилось до 1 файла (маски учитываются в превью как в сканировании).
 
 ---
@@ -406,7 +439,7 @@ wp option patch update security_scanner_credentials site_key 'deadbeef'
 
 **Шаги**:
 
-1. Импортировать дамп `has-key`, открыть страницу плагина.
+1. Применить состояние `has-key`, открыть страницу плагина.
 2. **Проверка**: дерево директорий видимо; root, wp-admin, wp-includes, wp-content отмечены.
 3. Раскрыть `wp-content` (ленивая загрузка подпапок через `security_scanner_dirchildren`).
 4. Снять галочку с `wp-content/plugins`.
@@ -423,17 +456,56 @@ wp option patch update security_scanner_credentials site_key 'deadbeef'
 
 **Шаги**:
 
-1. Импортировать дамп `has-key`, залогиниться, открыть страницу плагина.
+1. Применить состояние `has-key`, залогиниться, открыть страницу плагина.
 2. Зарегистрировать домен (первая регистрация) — успех.
 3. Повторно зарегистрировать тот же домен — ошибка «домен уже зарегистрирован».
 4. **Проверка**: error-нотис находится в видимой области вьюпорта (`waitForInViewport`).
-5. Повторно импортировать дамп `has-key` (сбрасывает сессию — обязателен повторный логин) и залогиниться.
-6. Создать тест-директорию, открыть страницу плагина, выбрать только `e2e-test`, запустить сканирование.
-7. **Проверка**: секция прогресса `.llar-status` в вьюпорте, `.llar-progress` видима, страница реально прокручена (`scrollY > 0`).
-8. Нажать Stop.
-9. **Проверка**: инжектированный WP-нотис `#wpbody-content > .notice.notice-info` прокручен в видимую область.
+5. Зарегистрировать тест-директорию (`register-scan-dir-small`), выбрать только `e2e-test`, запустить сканирование.
+   (Смена состояния через test-helper.php не сбрасывает сессию — повторный логин не нужен,
+   в отличие от старых SQL-дампов.)
+6. **Проверка**: секция прогресса `.llar-status` в вьюпорте, `.llar-progress` видима, страница реально прокручена (`scrollY > 0`).
+7. Нажать Stop.
+8. **Проверка**: инжектированный WP-нотис `#wpbody-content > .notice.notice-info` прокручен в видимую область.
 
 **Реализация в JS**: модуль `assets/js/src/viewport.js` (`scrollIntoView`/`revealIntoView`), вызывается из `notices.js` (серверные нотисы после PRG), `status.js` (раскрытие секции прогресса при старте сканирования) и `stopScan.js` (нотис после остановки сканирования).
+
+---
+
+## S25. Скан реальной папки С опасными файлами (akismet + malware/)
+
+**Цель**: сканер находит опасные файлы, подмешанные в реальный корпус плагина:
+корпус akismet (~48 файлов) + подпапка `malware/` с 7 условно опасными файлами
+(5 malicious по имени — `virus.php`, `infected-virus-payload.php`, `virus-test.php`,
+`malicious_loader.php`, `Malicious-dropper.php`; 2 suspicious — `suspicious-note.php`,
+`SUSPISIOUS-typo.php`). Фикстура: `e2e/fixtures/scan-site`.
+
+**Шаги**:
+
+1. Применить состояние `has-key`, зарегистрировать `register-scan-dir-site`, открыть страницу плагина.
+2. Выбрать только `e2e-test`, запустить скан, дождаться завершения.
+3. **Проверка**: summary «Scan completed: N files scanned, 7 suspicious» (N > 7 —
+   корпус действительно просканирован), скин `--findings`.
+4. **Проверка**: фильтр «Suspicious only» включён — видно ровно 7 строк:
+   5 `.is-infected` + 2 `.is-suspicious`, имена — ровно файлы фикстуры.
+5. **Проверка**: папка `malware` несёт alert-бейдж с количеством находок в поддереве.
+6. Снять фильтр — видно все N строк, включая чистые `.is-clean` из akismet.
+
+---
+
+## S26. Скан той же папки БЕЗ опасных файлов — чисто
+
+**Цель**: контрольный сценарий к S25: тот же движок на чистом корпусе (только akismet,
+`e2e/fixtures/scan-site/akismet`, вариант `register-scan-dir-akismet`) не находит ничего —
+значит «чисто» = «нечего находить», а не «сканер не отработал».
+
+**Шаги**:
+
+1. Применить состояние `has-key`, зарегистрировать `register-scan-dir-akismet`, открыть страницу плагина.
+2. Выбрать только `e2e-test`, запустить скан, дождаться завершения.
+3. **Проверка**: summary «Scan completed: N files scanned, 0 suspicious» (N > 0 —
+   корпус действительно просканирован), скин `--clean`.
+4. **Проверка**: ни одной `.is-infected` / `.is-suspicious` строки в дереве.
+5. С фильтром — 0 видимых строк; без фильтра — все N, все чистые.
 
 ---
 
@@ -451,6 +523,8 @@ wp option patch update security_scanner_credentials site_key 'deadbeef'
 | **P1** | S19 — Нет авто-resume после reload | Молчаливое продолжение запрещено |
 | **P1** | S22 — Превью файлов до скана | Новая core-фича |
 | **P1** | S23 — Каскад дерева директорий | Новая core-фича |
+| **P1** | S25 — Опасные файлы в реальной папке | Главная фича — детект |
+| **P1** | S26 — Чистая папка без находок | Контроль к S25 (не ложный «чисто») |
 | **P2** | S7 — Сетевой сбой при старте | Обработка ошибок |
 | **P2** | S9 — Refresh страницы | UX |
 | **P2** | S16 — Toggle filter | UX |
@@ -477,8 +551,34 @@ wp option patch update security_scanner_credentials site_key 'deadbeef'
 | Хранение ключа в wp_options | S4, S6 |
 | 5xx / таймаут → повтор | S7, S8 |
 | Oversized files | S14 |
+| Детект опасных файлов + отсутствие ложных находок | S25, S26 |
 
 ## Как запускать
+
+### docker (основной способ, DDEV не нужен)
+
+```sh
+# 1. Поднять стек (db + wordpress + mock + одноразовый setup)
+#    порты и креды администратора — в .env (см. .env.example)
+docker compose up -d db wordpress mock setup
+
+# 2. Прогнать весь сюит (контейнер e2e сам сделает npm ci и запустит Playwright)
+docker compose run --rm --no-deps e2e
+
+# Один сценарий / отчёт
+docker compose run --rm --no-deps e2e sh -c "npx playwright test -g 'S25' --reporter=list"
+
+# 3. Ручная отладка из контейнера wordpress
+docker compose exec -T wordpress curl -s "http://wordpress/test-helper.php?action=state-has-key"
+docker compose exec -T wordpress curl -s http://mock:9000/debug
+
+# Полный сброс (чистый сайт при следующем up)
+docker compose down -v && docker compose up -d db wordpress mock setup
+```
+
+Хост-доступ: `http://localhost:${WP_PORT}` при записи `127.0.0.1 wordpress` в `/etc/hosts`.
+
+### DDEV (альтернатива)
 
 ```sh
 # 1. Поднять окружение и mock
@@ -493,7 +593,7 @@ curl -s -X POST http://127.0.0.1:9000/reset
 
 # 4. Выполнить сценарий по шагам (руководствуясь описанием выше)
 # или прогнать автотесты:
-npx playwright test                # весь сюит (S1–S24)
+npx playwright test                # весь сюит (S1–S26 + php-error-capture)
 npx playwright test -g "S23"       # один сценарий
 
 # 5. Проверить состояние mock-сервера
@@ -505,9 +605,19 @@ curl -sk "https://llar-imunify.ddev.site/test-helper.php?action=disable-mock"
 
 ## Имей в виду
 
-- Mock-сервер распределяет вердикты циклически по `file_index % 3`. При малом количестве файлов (1-2) какие-то вердикты могут не встретиться.
+- Вердикты mock-сервера определяются ТОЛЬКО по имени файла: `virus`/`malicious` →
+  malicious (двухфазный: needs_sha256 → needs_upload), `suspicious`/`suspisious` →
+  suspicious (готовый вердикт), остальные — clean. Циклическое распределение `% 3`
+  убрано — счётчики находок в S25/S26/S16 детерминированы.
+- Ожидания в тестах — событийные (`expect.poll`, `toBeVisible`), фиксированные
+  `waitForTimeout` не используются.
+- Каждый тест в конце проверяет `wp-content/debug.log`: mu-plugin php-error-capture
+  собирает все PHP warnings/notices (кроме deprecations), и любой такой вылов
+  фейлит тест (`expectNoPhpErrors`).
+- `state-*` сбрасывает и mock — регистратор отвергает повторную регистрацию домена,
+  без сброса S6 не смог бы ре-регистрировать домен после S1/S3.
 - Время поллинга — 4 секунды. Сценарий с эскалацией (S8) занимает ~20 секунд.
-- `php -S` — однопоточный сервер. Два одновременных запроса встанут в очередь, а не упадут — S13 это не ломает.
+- `php -S` (DDEV) — однопоточный сервер. Два одновременных запроса встанут в очередь,
+  а не упадут — S13 это не ломает. В docker mock — отдельный сервис, ограничений нет.
 - AJAX-запросы через `admin-ajax.php` требуют WordPress-сессию (куки). Тестировать их curl-ом сложно — лучше через Playwright / браузерную консоль.
-- `importDump` в середине теста сбрасывает сессию (дамп восстанавливает `wp_usermeta` со своими session tokens) — после него обязателен повторный `login(page)` перед навигацией в wp-admin.
 - WP 7.0 включает cross-document view transitions в админке (`@view-transition { navigation: auto }` под `prefers-reduced-motion: no-preference`). В headless Chromium прерванный transition может подвесить рендерер следующего документа (rAF не тикает — actionability-проверки Playwright висят вечно). Поэтому в `playwright.config.ts` задано `contextOptions: { reducedMotion: 'reduce' }`.

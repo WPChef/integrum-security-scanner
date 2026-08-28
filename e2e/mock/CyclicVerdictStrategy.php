@@ -1,16 +1,20 @@
 <?php
 /**
- * Default verdict strategy: cyclic assignment by file_index mod 3.
+ * Default verdict strategy: file names decide, everything else is clean.
  *
- *   file_index % 3 == 0  -> needs_sha256 -> clean
- *   file_index % 3 == 1  -> needs_sha256 -> malicious (EICAR_TEST_FILE)
- *   file_index % 3 == 2  -> has_verdict   -> suspicious (OBFUSCATED_EVAL)
+ * Path markers (checked case-insensitively as substrings):
+ *   - "virus" or "malicious"  -> malicious, starting at needs_sha256 so the
+ *     mock walks the full malicious lifecycle (hash -> upload -> verdict),
+ *     mirroring how the real server asks for the body of a file it flagged.
+ *   - "suspicious" (and the common typo "suspisious") -> suspicious, delivered
+ *     immediately (has_verdict).
+ *   - anything else            -> clean via needs_sha256.
  *
- * Index % 3 == 1 starts at needs_sha256 but resolves to a MALICIOUS verdict,
- * so the server (see ScanEngine) flips it to needs_upload on the NEXT poll.
- * This forces a single physical file to traverse two action stages across
- * two polls — the exact path that exposed the scanned_bytes double-charging
- * bug when the server reissues a fresh file_id per stage.
+ * Deterministic for e2e fixture folders: a folder with no marked files scans
+ * clean, a folder with marked files flags exactly those files. The malicious
+ * path still forces a single physical file to traverse two action stages
+ * across two polls (file_id rotates per stage) — the path that exposed the
+ * scanned_bytes double-charging bug.
  *
  * @package Llar\SecurityScanner\E2e\Mock
  */
@@ -20,22 +24,21 @@ declare( strict_types = 1 );
 namespace Llar\SecurityScanner\E2e\Mock;
 
 /**
- * Simple cycling verdict strategy.
+ * Name-driven verdict strategy: fixture file names decide the outcome.
  *
- * Override: the file PATH decides the verdict, regardless of index (checked
- * case-insensitively as substrings, malicious first):
+ * Path markers (checked case-insensitively as substrings, malicious first):
  *   - "virus" or "malicious"  -> malicious, starting at needs_sha256 so the
  *     mock walks the full malicious lifecycle (hash -> upload -> verdict),
  *     mirroring how the real server asks for the body of a file it flagged.
  *   - "suspicious" (and the common typo "suspisious") -> suspicious, delivered
- *     immediately (has_verdict), like the cyclic suspicious path.
+ *     immediately (has_verdict).
  */
 final class CyclicVerdictStrategy implements VerdictStrategy {
 
 	/**
 	 * {@inheritdoc}
 	 *
-	 * @param int    $file_index Index.
+	 * @param int    $file_index Index (unused — verdicts are name-driven).
 	 * @param string $path       Manifest path.
 	 * @return string
 	 */
@@ -47,17 +50,15 @@ final class CyclicVerdictStrategy implements VerdictStrategy {
 				: 'has_verdict';
 		}
 
-		return match ( $file_index % 3 ) {
-			0       => 'needs_sha256',
-			1       => 'needs_sha256', // malicious verdict -> flipped to needs_upload after hashing.
-			default => 'has_verdict',
-		};
+		// Unmarked files are clean: the client submits a hash, the verdict lands
+		// on a later poll (needs_sha256 -> pending_scan -> has_verdict).
+		return 'needs_sha256';
 	}
 
 	/**
 	 * {@inheritdoc}
 	 *
-	 * @param int    $file_index Index.
+	 * @param int    $file_index Index (unused — verdicts are name-driven).
 	 * @param string $path       Manifest path.
 	 * @return string
 	 */
@@ -67,11 +68,7 @@ final class CyclicVerdictStrategy implements VerdictStrategy {
 			return $name_verdict;
 		}
 
-		return match ( $file_index % 3 ) {
-			0       => 'clean',
-			1       => 'malicious',
-			default => 'suspicious',
-		};
+		return 'clean';
 	}
 
 	/**

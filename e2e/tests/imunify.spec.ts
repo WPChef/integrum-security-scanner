@@ -1,23 +1,33 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import {
-  showScenario, cleanupState, importDump, login, openPluginPage,
+  showScenario, cleanupState, applyState, login, openPluginPage,
   getSiteKeyViaForm, startScan, waitForScanCompletion,
   countVisibleFiles, isSuspiciousOnlyChecked, toggleSuspiciousOnly,
-  getNoticeText, getNoticeType, isScanDisabled,
+  getNoticeText, getNoticeType, waitForNotice, isScanDisabled,
   setIncludeMasks, setExcludeMasks, toggleDirectory, selectOnlyDirectories,
   getIncludeMasks, getExcludeMasks, isDirectoryChecked, isDirectoryIndeterminate,
   expandTreeNode, isTreeNodeChecked, toggleTreeNode,
   fillSiteKeyField, getKeyFieldType, toggleKeyVisibility, waitForInViewport, getPageScrollY,
-  createTestDir, enableMock, disableMock, setSiteKey,
-  getProgressLabel, parseProgressBytes, getProgressFileCount,
+  registerScanDir, enableMock, disableMock, setSiteKey,
+  expectNoPhpErrors, getProgressLabel, waitForProgressLabel, parseProgressBytes, getProgressFileCount,
   openPluginsPage, isPluginActive, activatePlugin, deactivatePlugin, isPluginMenuPresent,
 } from './helpers';
+
+/**
+ * Registration email for the get_key form (mock validates format only).
+ */
+const OWNER_EMAIL = 'admin@e2e.test';
 
 test.describe('File Security Scanner E2E', () => {
 
   test.beforeEach(async ({ page }) => {
     await cleanupState(page);
     await enableMock(page);
+  });
+
+  test.afterEach(async ({ page }, testInfo) => {
+    // PHP warnings/notices captured into wp-content/debug.log fail the test.
+    await expectNoPhpErrors(page, testInfo);
   });
 
   test.afterAll(async ({ browser }) => {
@@ -35,7 +45,7 @@ test.describe('File Security Scanner E2E', () => {
     await showScenario(page, 'S1: Happy path — register, scan, view results');
 
     // Given: clean WP with plugin activated, no key.
-    await importDump(page, 'no-key');
+    await applyState(page, 'no-key');
     await login(page);
     await openPluginPage(page);
 
@@ -43,7 +53,7 @@ test.describe('File Security Scanner E2E', () => {
     expect(await isScanDisabled(page)).toBe(true);
 
     // When: user registers the site.
-    await getSiteKeyViaForm(page, 'admin@llar-imunify.ddev.site');
+    await getSiteKeyViaForm(page, OWNER_EMAIL);
 
     // Then: success notice, scan area becomes enabled.
     expect(await getNoticeType(page)).toBe('success');
@@ -54,9 +64,9 @@ test.describe('File Security Scanner E2E', () => {
     expect(await getKeyFieldType(page)).toBe('password');
     expect((await page.locator('#llar-key').inputValue()).length).toBeGreaterThan(0);
 
-    // Create test directory with 3 small files + register it as a scan option.
-    // Then scan only those files (fast: ~20s).
-    await createTestDir(page);
+    // Register the small fixture folder (3 files: clean, malicious,
+    // suspicious) as a scan option, then scan only it (fast).
+    await registerScanDir(page, 'small');
     await openPluginPage(page);
 
     // When: user starts a scan on the test directory.
@@ -70,18 +80,13 @@ test.describe('File Security Scanner E2E', () => {
     await expect(page.locator('.llar-progress')).toBeVisible();
     await expect(page.locator('.llar-status')).toContainText('Do not close');
 
-    // Wait a poll cycle for the label to pick up file-count + byte info.
-    // The mock rotates file_id per stage and routes malicious files through
-    // needs_sha256 -> needs_upload across two polls, so by the second poll the
-    // byte counter has had a chance to double-count if the dedup key is wrong.
-    await page.waitForTimeout(5000);
-
     // Then: the progress label must report BOTH the file-count pair and the
     // byte-size pair, and scanned_bytes must NEVER exceed total_bytes. This is
-    // the exact symptom that previously rendered "978 KB / 808 KB". We assert
-    // hard (not silently skip) so a regression in the label format or in byte
-    // accounting fails loudly.
-    const label = await getProgressLabel(page);
+    // the exact symptom that previously rendered "978 KB / 808 KB". The mock
+    // rotates file_id per stage and routes malicious files through
+    // needs_sha256 -> needs_upload across two polls; waiting for the fully
+    // formed label guarantees at least the first poll has been rendered.
+    const label = await waitForProgressLabel(page);
     expect(label.length, 'progress label should be present mid-scan').toBeGreaterThan(0);
     expect(label, 'progress label should start with a percentage').toMatch(/\d+%/);
 
@@ -103,6 +108,17 @@ test.describe('File Security Scanner E2E', () => {
     // When: scan completes.
     const status = await waitForScanCompletion(page);
     expect(status).toBe('completed');
+
+    // Then: the scan section reports the outcome explicitly — the progress
+    // block and the stale "Scan started… do not close" notice disappear,
+    // and a completion summary takes their place.
+    await expect(page.locator('.llar-status')).toBeHidden();
+    await expect(page.locator('section:has(.llar-status) .security-scanner-notice')).toBeHidden();
+    await expect(page.locator('.llar-scan-summary')).toBeVisible();
+    await expect(page.locator('.llar-scan-summary')).toContainText('Scan completed');
+    // Mock verdicts for the 3-file dir: clean, malicious (infected), suspicious.
+    await expect(page.locator('.llar-scan-summary')).toContainText('3 files scanned');
+    await expect(page.locator('.llar-scan-summary')).toContainText('2 suspicious');
 
     // Then: results are attached to the directory tree — the tree is marked
     // complete and every scanned folder carries a result badge.
@@ -131,23 +147,25 @@ test.describe('File Security Scanner E2E', () => {
     await showScenario(page, 'S2: Re-registration — already registered domain');
 
     // Given: site already has a key AND the mock knows about the site.
-    await importDump(page, 'has-key');
+    await applyState(page, 'has-key');
     await login(page);
     await openPluginPage(page);
 
     // First registration should succeed (mock was reset by beforeEach).
-    await getSiteKeyViaForm(page, 'admin@llar-imunify.ddev.site', { clearKey: true });
-    await page.waitForTimeout(500);
+    await getSiteKeyViaForm(page, OWNER_EMAIL, { clearKey: true });
+    await waitForNotice(page, 'success');
     expect(await getNoticeType(page)).toBe('success');
 
     // Try to re-register same domain.
-    await getSiteKeyViaForm(page, 'admin@llar-imunify.ddev.site', { clearKey: true });
-    await page.waitForTimeout(500);
+    await getSiteKeyViaForm(page, OWNER_EMAIL, { clearKey: true });
+    await waitForNotice(page, 'error');
 
-    // Then: error notice about already being registered.
+    // Then: error notice carries the API's own rejection reason verbatim
+    // (plus the paste-key hint for a duplicate domain).
     expect(await getNoticeType(page)).toBe('error');
     const notice = await getNoticeText(page);
-    expect(notice).toMatch(/already registered|not obtain a site key/i);
+    expect(notice).toMatch(/already registered/i);
+    expect(notice).toMatch(/Paste the site key/i);
 
     // Page is still functional — scan form is enabled.
     expect(await isScanDisabled(page)).toBe(false);
@@ -160,7 +178,7 @@ test.describe('File Security Scanner E2E', () => {
     await showScenario(page, 'S4: Scan blocked — no site key');
 
     // Given: no key.
-    await importDump(page, 'no-key');
+    await applyState(page, 'no-key');
     await login(page);
     await openPluginPage(page);
 
@@ -182,10 +200,10 @@ test.describe('File Security Scanner E2E', () => {
   test('S6: Invalid key prompts re-registration', async ({ page }) => {
     await showScenario(page, 'S6: Invalid site key — re-registration prompt');
 
-    // Given: dump key synced to mock, then WP key replaced with a junk value.
-    await importDump(page, 'has-key');
+    // Given: valid key synced to mock, then WP key replaced with a junk value.
+    await applyState(page, 'has-key');
     await setSiteKey(page, 'deadbeef');
-    await createTestDir(page);
+    await registerScanDir(page, 'small');
     await login(page);
     await openPluginPage(page);
 
@@ -197,7 +215,8 @@ test.describe('File Security Scanner E2E', () => {
     expect(await getNoticeText(page)).toMatch(/site key is missing or was rejected/i);
 
     // Then: re-register via the connection form and scan succeeds.
-    await getSiteKeyViaForm(page, 'admin@llar-imunify.ddev.site', { clearKey: true });
+    await getSiteKeyViaForm(page, OWNER_EMAIL, { clearKey: true });
+    await waitForNotice(page, 'success');
     expect(await getNoticeType(page)).toBe('success');
 
     await selectOnlyDirectories(page, ['e2e-test']);
@@ -212,8 +231,8 @@ test.describe('File Security Scanner E2E', () => {
     await showScenario(page, 'S16: Toggle "Show suspicious only" filter');
 
     // Given: has key, scan completed.
-    await importDump(page, 'has-key');
-    await createTestDir(page);
+    await applyState(page, 'has-key');
+    await registerScanDir(page, 'small');
     await login(page);
     await openPluginPage(page);
 
@@ -225,17 +244,22 @@ test.describe('File Security Scanner E2E', () => {
 
     // Default: only suspicious/infected files.
     expect(await isSuspiciousOnlyChecked(page)).toBe(true);
+    // Mock verdicts for the small fixture: 1 clean + 1 malicious + 1 suspicious.
+    await expect.poll(() => countVisibleFiles(page), { timeout: 10_000 }).toBe(2);
     const filtered = await countVisibleFiles(page);
 
-    // Toggle off → all files.
+    // Toggle off → all files, including the clean one (its folder must be
+    // expanded so the row is actually on screen, not just un-hidden).
     await toggleSuspiciousOnly(page);
+    await expect.poll(() => countVisibleFiles(page), { timeout: 10_000 }).toBe(3);
     const all = await countVisibleFiles(page);
-    expect(all).toBeGreaterThanOrEqual(filtered);
+    expect(all).toBe(3);
+    await expect(page.locator('.llar-dirtree .llar-tree__file.is-clean')).toBeVisible();
 
     // Toggle back on.
     await toggleSuspiciousOnly(page);
-    const filteredAgain = await countVisibleFiles(page);
-    expect(filteredAgain).toBe(filtered);
+    await expect.poll(() => countVisibleFiles(page), { timeout: 10_000 }).toBe(filtered);
+    await expect(page.locator('.llar-dirtree .llar-tree__file.is-clean')).toBeHidden();
   });
 
   // =========================================================================
@@ -245,8 +269,8 @@ test.describe('File Security Scanner E2E', () => {
     await showScenario(page, 'S17: Form settings persist across reload');
 
     // Given: has key, test dir available.
-    await importDump(page, 'has-key');
-    await createTestDir(page);
+    await applyState(page, 'has-key');
+    await registerScanDir(page, 'small');
     await login(page);
     await openPluginPage(page);
 
@@ -274,14 +298,14 @@ test.describe('File Security Scanner E2E', () => {
     await showScenario(page, 'S18: Manual key save');
 
     // Given: no key.
-    await importDump(page, 'no-key');
+    await applyState(page, 'no-key');
     await login(page);
     await openPluginPage(page);
 
     // When: user pastes a key into the field and saves.
     const fakeKey = 'e2e-manual-key-' + Date.now();
     await fillSiteKeyField(page, fakeKey);
-    await getSiteKeyViaForm(page, 'admin@llar-imunify.ddev.site');
+    await getSiteKeyViaForm(page, OWNER_EMAIL);
 
     // Then: a success notice confirms the save.
     expect(await getNoticeType(page)).toBe('success');
@@ -311,8 +335,8 @@ test.describe('File Security Scanner E2E', () => {
     await showScenario(page, 'S19: Reload must not resume the scan');
 
     // Given: a registered site and a fast test directory.
-    await importDump(page, 'has-key');
-    await createTestDir(page);
+    await applyState(page, 'has-key');
+    await registerScanDir(page, 'small');
     await login(page);
     await openPluginPage(page);
 
@@ -345,8 +369,8 @@ test.describe('File Security Scanner E2E', () => {
   test('S20: Deactivation removes admin page and keeps site healthy', async ({ page }) => {
     await showScenario(page, 'S20: Deactivate plugin — admin page disappears, site intact');
 
-    // Given: plugin active (the dump ships it in active_plugins).
-    await importDump(page, 'has-key');
+    // Given: plugin active (state-has-key activates it).
+    await applyState(page, 'has-key');
     await login(page);
     await openPluginsPage(page);
     expect(await isPluginActive(page)).toBe(true);
@@ -378,8 +402,8 @@ test.describe('File Security Scanner E2E', () => {
   test('S21: Activation restores the admin page', async ({ page }) => {
     await showScenario(page, 'S21: Activate plugin — page returns, no fatal error');
 
-    // Given: plugin deactivated (the dump ships it active, so deactivate first).
-    await importDump(page, 'has-key');
+    // Given: plugin deactivated (state ships it active, so deactivate first).
+    await applyState(page, 'has-key');
     await login(page);
     await openPluginsPage(page);
     expect(await deactivatePlugin(page)).toBe(true);
@@ -411,8 +435,8 @@ test.describe('File Security Scanner E2E', () => {
 
     // Given: has key, test dir available, no saved scan settings (cleanup
     // in beforeEach removed the option, so the form shows its defaults).
-    await importDump(page, 'has-key');
-    await createTestDir(page);
+    await applyState(page, 'has-key');
+    await registerScanDir(page, 'small');
     await login(page);
     await openPluginPage(page);
 
@@ -456,7 +480,7 @@ test.describe('File Security Scanner E2E', () => {
     await expect(page.locator('.llar-preview__count')).toHaveText(/^3 files$/);
 
     // When: an include mask narrows the scope to a single file.
-    await setIncludeMasks(page, 'test-0.php');
+    await setIncludeMasks(page, 'test-clean.php');
 
     // Then: the preview applies the mask exactly like a real scan would.
     await expect(page.locator('.llar-dirtree .llar-tree__file'))
@@ -471,7 +495,7 @@ test.describe('File Security Scanner E2E', () => {
 
     // Given: has key, default form state (beforeEach cleanup removed saved
     // settings, so every node starts checked).
-    await importDump(page, 'has-key');
+    await applyState(page, 'has-key');
     await login(page);
     await openPluginPage(page);
 
@@ -521,29 +545,28 @@ test.describe('File Security Scanner E2E', () => {
 
     // ── Phase A: an error notice lands in the visible area ────────────
     // Given: a registered site — re-registering it fails with an error notice.
-    await importDump(page, 'has-key');
+    // State changes go through test-helper.php without wiping the session,
+    // so one login covers all phases (unlike the old SQL-dump imports).
+    await applyState(page, 'has-key');
     await login(page);
     await openPluginPage(page);
 
     // First registration succeeds (mock was reset by beforeEach).
-    await getSiteKeyViaForm(page, 'admin@llar-imunify.ddev.site', { clearKey: true });
-    await page.waitForTimeout(500);
+    await getSiteKeyViaForm(page, OWNER_EMAIL, { clearKey: true });
+    await waitForNotice(page, 'success');
     expect(await getNoticeType(page)).toBe('success');
 
     // When: the same domain is re-registered → error notice after redirect.
-    await getSiteKeyViaForm(page, 'admin@llar-imunify.ddev.site', { clearKey: true });
-    await page.waitForTimeout(500);
+    await getSiteKeyViaForm(page, OWNER_EMAIL, { clearKey: true });
+    await waitForNotice(page, 'error');
     expect(await getNoticeType(page)).toBe('error');
 
     // Then: the notice is in the visible area (never rendered off-screen).
     await waitForInViewport(page, '.security-scanner-notice');
 
     // ── Phase B: the progress bar lands in the visible area ───────────
-    // Given: a working key (dump) and a fresh job on the fast test dir.
-    // The import replaces the DB and wipes the Phase A session, so log in again.
-    await importDump(page, 'has-key');
-    await login(page);
-    await createTestDir(page);
+    // Given: a working key and a fresh job on the fast fixture dir.
+    await registerScanDir(page, 'small');
     await openPluginPage(page);
     await selectOnlyDirectories(page, ['e2e-test']);
     const started = await startScan(page);
@@ -564,5 +587,123 @@ test.describe('File Security Scanner E2E', () => {
 
     // Then: the injected notice is scrolled into the visible area.
     await waitForInViewport(page, '#wpbody-content > .notice.notice-info');
+  });
+
+  // =========================================================================
+  // S25 — Scan a real-world folder WITH dangerous files (akismet + malware/)
+  // =========================================================================
+  test('S25: Scan finds dangerous files mixed into a real plugin folder', async ({ page }) => {
+    await showScenario(page, 'S25: akismet corpus + malware/ subfolder — findings reported');
+
+    // Given: a registered site and the "site" fixture: a real plugin corpus
+    // (akismet, ~50 files) with a malware/ subfolder of 7 dangerous files
+    // (5 malicious by name: *virus*, *malicious*; 2 suspicious).
+    await applyState(page, 'has-key');
+    await registerScanDir(page, 'site');
+    await login(page);
+    await openPluginPage(page);
+
+    // When: the whole fixture folder is scanned.
+    await selectOnlyDirectories(page, ['e2e-test']);
+    expect(await startScan(page)).toBe(true);
+    expect(await waitForScanCompletion(page)).toBe('completed');
+
+    // Then: the summary reports the total and exactly the 7 findings.
+    const summary = page.locator('.llar-scan-summary');
+    await expect(summary).toContainText(/Scan completed: (\d+) files scanned, 7 suspicious\./);
+    const scannedTotal = parseInt(
+      (await summary.textContent())?.match(/Scan completed: (\d+) files scanned/)?.[1] ?? '0',
+      10,
+    );
+    expect(scannedTotal, 'akismet corpus + 7 dangerous files must be scanned').toBeGreaterThan(7);
+
+    // The summary skin reflects findings (not the clean variant).
+    await expect(summary).toHaveClass(/llar-scan-summary--findings/);
+
+    // And: with the default "suspicious only" filter exactly the 7 dangerous
+    // files are visible; folders with findings auto-expand.
+    expect(await isSuspiciousOnlyChecked(page)).toBe(true);
+    await expect
+      .poll(() => countVisibleFiles(page), { timeout: 10_000 })
+      .toBe(7);
+
+    // Exactly 5 infected + 2 suspicious rows, all inside the malware subtree.
+    await expect(page.locator('.llar-dirtree .llar-tree__file.is-infected')).toHaveCount(5);
+    await expect(page.locator('.llar-dirtree .llar-tree__file.is-suspicious')).toHaveCount(2);
+    const rowTitles = await page.locator('.llar-dirtree .llar-tree__file .llar-tree__file-name')
+      .evaluateAll((els) => els.map((el) => (el as HTMLElement).textContent?.trim() ?? ''));
+    const flaggedNames = rowTitles.filter((n) => /virus|malicious|suspicious|suspisious/i.test(n));
+    expect(flaggedNames.sort(), 'every flagged row is a fixture-marked file').toEqual([
+      'Malicious-dropper.php',
+      'SUSPISIOUS-typo.php',
+      'infected-virus-payload.php',
+      'malicious_loader.php',
+      'suspicious-note.php',
+      'virus-test.php',
+      'virus.php',
+    ]);
+
+    // The malware folder carries an alert badge with the subtree count.
+    // (The fixture is materialised as ABSPATH/e2e-test-scan-dir, so the
+    // malware subfolder renders with rel "e2e-test-scan-dir/malware".)
+    await expect(page.locator('.llar-dirtree__node[data-rel$="e2e-test-scan-dir/malware"] .llar-node-badge--alert'))
+      .toContainText('7');
+
+    // And: unchecking the filter reveals the clean akismet corpus as well.
+    await toggleSuspiciousOnly(page);
+    await expect
+      .poll(() => countVisibleFiles(page), { timeout: 10_000 })
+      .toBe(scannedTotal);
+    await expect(page.locator('.llar-dirtree .llar-tree__file.is-clean').first()).toBeVisible();
+  });
+
+  // =========================================================================
+  // S26 — Scan the SAME corpus WITHOUT dangerous files → clean
+  // =========================================================================
+  test('S26: Scan of a folder without dangerous files is clean', async ({ page }) => {
+    await showScenario(page, 'S26: akismet corpus only — no findings');
+
+    // Control phase prerequisite: S25 just proved on the same fixture family
+    // that marked files DO get flagged; a clean result here therefore means
+    // "nothing to find", not "scanner did not run".
+    //
+    // Given: a registered site and the akismet-only fixture (no marked files).
+    await applyState(page, 'has-key');
+    await registerScanDir(page, 'akismet');
+    await login(page);
+    await openPluginPage(page);
+
+    // When: the clean corpus is scanned.
+    await selectOnlyDirectories(page, ['e2e-test']);
+    expect(await startScan(page)).toBe(true);
+    expect(await waitForScanCompletion(page)).toBe('completed');
+
+    // Then: files were actually scanned (guard against a silent no-op)…
+    const summary = page.locator('.llar-scan-summary');
+    await expect(summary).toContainText(/Scan completed: (\d+) files scanned, 0 suspicious\./);
+    const scannedTotal = parseInt(
+      (await summary.textContent())?.match(/Scan completed: (\d+) files scanned/)?.[1] ?? '0',
+      10,
+    );
+    expect(scannedTotal, 'the akismet corpus must actually be scanned').toBeGreaterThan(0);
+
+    // …and the summary uses the clean skin.
+    await expect(summary).toHaveClass(/llar-scan-summary--clean/);
+
+    // And: no infected/suspicious rows anywhere in the tree.
+    await expect(page.locator('.llar-dirtree .llar-tree__file.is-infected')).toHaveCount(0);
+    await expect(page.locator('.llar-dirtree .llar-tree__file.is-suspicious')).toHaveCount(0);
+
+    // With the filter on, nothing is visible; the clean corpus is intact.
+    expect(await isSuspiciousOnlyChecked(page)).toBe(true);
+    await expect.poll(() => countVisibleFiles(page), { timeout: 10_000 }).toBe(0);
+
+    // Unchecking reveals the scanned corpus, all clean.
+    await toggleSuspiciousOnly(page);
+    await expect
+      .poll(() => countVisibleFiles(page), { timeout: 10_000 })
+      .toBe(scannedTotal);
+    await expect(page.locator('.llar-dirtree .llar-tree__file.is-infected')).toHaveCount(0);
+    await expect(page.locator('.llar-dirtree .llar-tree__file.is-suspicious')).toHaveCount(0);
   });
 });

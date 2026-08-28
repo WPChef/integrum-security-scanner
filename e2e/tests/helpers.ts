@@ -1,9 +1,17 @@
-import { type Page } from '@playwright/test';
+import { type Page, type TestInfo, expect } from '@playwright/test';
 
 /**
- * Base URL for the test-helper.php script on the WordPress site.
+ * Base URL of the WordPress site under test.
+ *
+ * Inside docker compose the e2e container gets BASE_URL=http://wordpress;
+ * locally (DDEV) the default is the *.ddev.site install.
  */
-const HELPER_URL = 'https://llar-imunify.ddev.site/test-helper.php';
+const BASE_URL = (process.env.BASE_URL || 'https://llar-imunify.ddev.site').replace(/\/$/, '');
+
+/**
+ * URL of the test-helper.php script on the WordPress site.
+ */
+const HELPER_URL = `${BASE_URL}/test-helper.php`;
 
 /**
  * Admin page slug for the File Security Scanner plugin.
@@ -13,70 +21,92 @@ const ADMIN_URL = '/wp-admin/admin.php?page=security-scanner';
 /**
  * WP admin credentials for the test environment.
  */
-const ADMIN = { user: 'admin', pass: 'admin' };
+const ADMIN = {
+  user: process.env.ADMIN_USER || 'admin',
+  pass: process.env.ADMIN_PASS || 'admin',
+};
 
 // ---------------------------------------------------------------------------
-// State management
+// Helper endpoints (state changes via test-helper.php, no SQL dumps)
 // ---------------------------------------------------------------------------
 
 /**
- * Displays a scenario banner before test execution.
+ * Calls a test-helper.php action and asserts its completion marker.
+ *
+ * Uses page.request (shares the browser context, honors ignoreHTTPSErrors)
+ * instead of a navigation: the response resolves only when PHP has finished,
+ * so no sleeps are needed to "wait for the state change to land".
+ *
+ * @returns Full plain-text response body.
+ */
+async function helperAction(page: Page, action: string, marker?: string): Promise<string> {
+  const resp = await page.request.get(`${HELPER_URL}?action=${encodeURIComponent(action)}`);
+  const body = ((await resp.text()) ?? '').trim();
+  if (!resp.ok()) {
+    throw new Error(`test-helper action=${action} failed: HTTP ${resp.status()} ${body.slice(0, 120)}`);
+  }
+  if (marker && !body.includes(marker)) {
+    throw new Error(`test-helper action=${action} incomplete: ${body.slice(0, 120)}`);
+  }
+  return body;
+}
+
+/**
+ * Displays a scenario banner before test execution (for traces/videos).
  */
 export async function showScenario(page: Page, text: string): Promise<void> {
-  await page.goto(`${HELPER_URL}?action=echo&message=${encodeURIComponent(text)}`);
-  await page.waitForTimeout(1500);
+  await page.goto(`${HELPER_URL}?action=echo&message=${encodeURIComponent(text)}`, {
+    waitUntil: 'domcontentloaded',
+  });
 }
 
 /**
- * Resets plugin state (transients, credentials) to a clean slate.
- * Uses fetch() inside the page context so it hits the server-side.
+ * Resets plugin state (options, transients) and truncates the PHP error log.
  */
 export async function cleanupState(page: Page): Promise<void> {
-  await page.goto(`${HELPER_URL}?action=cleanup`, { waitUntil: 'commit' });
-  await page.waitForTimeout(300);
+  await helperAction(page, 'cleanup', 'CLEANUP COMPLETE');
 }
 
 /**
- * Imports a SQL dump into the database.
- * Uses fetch() via page context to hit the local DDEV test-helper.
+ * Applies a named site state via test-helper.php (replaces SQL dumps):
+ * cleanup + plugin active + credentials present or absent.
  */
-export async function importDump(page: Page, name: 'has-key' | 'no-key'): Promise<void> {
-  await page.goto(`${HELPER_URL}?action=import-${name}`, { waitUntil: 'commit' });
-  await page.waitForTimeout(1000);
+export async function applyState(page: Page, state: 'has-key' | 'no-key'): Promise<void> {
+  await helperAction(page, `state-${state}`, `STATE=${state}`);
+}
+
+/**
+ * Registers a fixture folder as the "e2e-test" scan directory.
+ *
+ * Variants (e2e/fixtures, mounted at /var/www/html/e2e-fixtures in docker):
+ *   small   — 3 files: clean, malicious, suspicious (exact verdict counts).
+ *   site    — akismet corpus + malware/ subfolder with dangerous files.
+ *   akismet — clean corpus only, no dangerous files.
+ *   malware — only the dangerous files.
+ */
+export async function registerScanDir(page: Page, variant: 'small' | 'site' | 'akismet' | 'malware'): Promise<void> {
+  await helperAction(page, `register-scan-dir-${variant}`, `SCAN DIR=${variant}`);
 }
 
 /**
  * Returns the current site_key from wp_options.
  */
 export async function getSiteKey(page: Page): Promise<string> {
-  const resp = await page.goto(`${HELPER_URL}?action=get-site-key`, { waitUntil: 'commit' });
-  const body = await resp?.text();
-  return (body ?? '').trim();
+  return (await helperAction(page, 'get-site-key')).trim();
 }
 
 /**
  * Sets an invalid site_key (for S6: invalid key scenario).
  */
 export async function setSiteKey(page: Page, key: string): Promise<void> {
-  await page.goto(`${HELPER_URL}?action=set-key-${encodeURIComponent(key)}`, { waitUntil: 'commit' });
-  await page.waitForTimeout(300);
-}
-
-/**
- * Creates a small test directory with PHP files and registers it
- * as a scan-able directory via WordPress option.
- */
-export async function createTestDir(page: Page): Promise<void> {
-  await page.goto(`${HELPER_URL}?action=create-test-dir`, { waitUntil: 'commit' });
-  await page.waitForTimeout(500);
+  await helperAction(page, `set-key-${encodeURIComponent(key)}`);
 }
 
 /**
  * Resets the E2E mock server state (clears all sites and jobs).
  */
 export async function resetMock(page: Page): Promise<void> {
-  await page.goto(`${HELPER_URL}?action=reset-mock`, { waitUntil: 'commit' });
-  await page.waitForTimeout(200);
+  await helperAction(page, 'reset-mock', 'MOCK RESET');
 }
 
 /**
@@ -84,16 +114,123 @@ export async function resetMock(page: Page): Promise<void> {
  * the local mock server. Also resets the mock state.
  */
 export async function enableMock(page: Page): Promise<void> {
-  await page.goto(`${HELPER_URL}?action=enable-mock`, { waitUntil: 'commit' });
-  await page.waitForTimeout(300);
+  await helperAction(page, 'enable-mock', 'MOCK ENABLED');
 }
 
 /**
  * Disables mock mode: the plugin reverts to the real API URLs.
  */
 export async function disableMock(page: Page): Promise<void> {
-  await page.goto(`${HELPER_URL}?action=disable-mock`, { waitUntil: 'commit' });
-  await page.waitForTimeout(200);
+  await helperAction(page, 'disable-mock', 'MOCK DISABLED');
+}
+
+// ---------------------------------------------------------------------------
+// PHP error capture (php-error-capture mu-plugin + wp-content/debug.log)
+// ---------------------------------------------------------------------------
+
+/**
+ * Log lines that are actual PHP diagnostics, e.g.
+ * "[28-Aug-2026 10:00:00 UTC] PHP Warning: message in … on line 12".
+ * Informational error_log() chatter (no "PHP <level>:" prefix) is ignored.
+ */
+const PHP_DIAGNOSTIC_RE =
+  /^\[[^\]]+\]\s*PHP\s+(?:Warning|Notice|Fatal error|Parse error|Deprecated|Strict standards)/i;
+
+/**
+ * Known-benign diagnostics that must not fail a test. Add narrowly-scoped
+ * patterns here when a third-party source emits harmless noise.
+ */
+const PHP_LOG_ALLOWLIST: RegExp[] = [
+  // e.g. /PHP Notice: .* in .*akismet.*/i,
+];
+
+/**
+ * Enables the artificial PHP warning (php-error-capture mu-plugin) so the
+ * harness can verify its debug.log capture pipeline.
+ */
+export async function seedPhpWarning(page: Page): Promise<void> {
+  await helperAction(page, 'seed-php-warning', 'PHP WARNING SEEDED');
+}
+
+/**
+ * Reports whether the php-error-capture mu-plugin is deployed.
+ *
+ * true  — CAPTURE=on (log endpoint live)
+ * false — CAPTURE=off (mu-plugin missing)
+ * null  — endpoint unreachable (site down / old helper)
+ */
+export async function isPhpCaptureEnabled(page: Page): Promise<boolean | null> {
+  try {
+    const resp = await page.request.get(`${HELPER_URL}?action=get-debug-log`, {
+      timeout: 15_000,
+    });
+    if (!resp.ok()) {
+      return null;
+    }
+    const body = await resp.text();
+    const header = (body.split('\n')[0] || '').trim();
+    if (header === 'CAPTURE=on') return true;
+    if (header === 'CAPTURE=off') return false;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Reads wp-content/debug.log via test-helper.php.
+ *
+ * Returns null when the endpoint is unreachable (site down, old helper) and
+ * "" when the capture mu-plugin is not deployed (e.g. a site without the
+ * local-env mount) — the harness never fails on its own absence.
+ */
+export async function fetchPhpDebugLog(page: Page): Promise<string | null> {
+  try {
+    const resp = await page.request.get(`${HELPER_URL}?action=get-debug-log`, {
+      timeout: 15_000,
+    });
+    if (!resp.ok()) {
+      return null;
+    }
+    const body = await resp.text();
+    const newline = body.indexOf('\n');
+    const header = (newline === -1 ? body : body.slice(0, newline)).trim();
+    if (header !== 'CAPTURE=on') {
+      return '';
+    }
+    return newline === -1 ? '' : body.slice(newline + 1);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * afterEach hook: fails the test when PHP diagnostics (warnings, notices,
+ * fatals — deprecations excluded) were captured in wp-content/debug.log
+ * while it ran. Attaches the filtered log to the test report.
+ */
+export async function expectNoPhpErrors(page: Page, testInfo: TestInfo): Promise<void> {
+  const log = await fetchPhpDebugLog(page);
+  if (!log) {
+    return; // null: endpoint missing; "": capture mu-plugin not deployed.
+  }
+  const entries = log
+    .split('\n')
+    .map((line) => line.trimEnd())
+    .filter((line) => PHP_DIAGNOSTIC_RE.test(line))
+    .filter((line) => !PHP_LOG_ALLOWLIST.some((re) => re.test(line)));
+
+  if (entries.length === 0) {
+    return;
+  }
+  await testInfo.attach('php-debug.log', {
+    body: entries.join('\n'),
+    contentType: 'text/plain',
+  });
+  throw new Error(
+    `PHP errors captured in wp-content/debug.log:\n${entries.slice(0, 20).join('\n')}` +
+      `${entries.length > 20 ? `\n… (+${entries.length - 20} more)` : ''}`,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -133,10 +270,31 @@ export async function login(page: Page): Promise<void> {
     { timeout: 5_000 },
   );
 
-  await Promise.all([
-    page.waitForURL('**/wp-admin/**', { timeout: 30_000 }),
-    page.locator('#loginform').evaluate((form: HTMLFormElement) => form.submit()),
-  ]);
+  await page.locator('#loginform').evaluate((form: HTMLFormElement) => form.submit());
+
+  // Either we land in wp-admin directly, or the admin-email confirmation
+  // interstitial shows first (wp-login.php?action=confirm_admin_email).
+  await page.waitForLoadState('domcontentloaded', { timeout: 30_000 });
+  await dismissAdminEmailConfirmation(page);
+  await page.waitForURL('**/wp-admin/**', { timeout: 30_000 });
+}
+
+/**
+ * Dismisses the WP 6.x admin email confirmation interstitial after login.
+ *
+ * Shows up on fresh installs when admin_email_lifespan is in the past (e.g.
+ * a container provisioned without a proper timestamp). “Remind me later”
+ * returns to wp-admin; when the interstitial is absent this is a no-op.
+ */
+export async function dismissAdminEmailConfirmation(page: Page): Promise<void> {
+  if (!page.url().includes('action=confirm_admin_email')) {
+    return;
+  }
+  const remindLater = page.locator('input[name="remind_me_later"]');
+  if (await remindLater.isVisible({ timeout: 5_000 }).catch(() => false)) {
+    await remindLater.click();
+    await page.waitForLoadState('domcontentloaded');
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -278,31 +436,29 @@ export async function getSiteKeyViaForm(page: Page, email: string, options?: { c
 // ---------------------------------------------------------------------------
 
 /**
- * Clicks the "Scan" button and waits for the progress section to appear.
+ * Clicks the "Scan" button and waits for the scan to actually start.
  *
- * @returns true if the scan started (progress bar is visible).
+ * The start is observed, not guessed: the .llar-status section becomes
+ * visible when the JS poller kicks in; a blocking error surfaces as an
+ * error notice instead.
+ *
+ * @returns true if the scan started (progress section visible).
  */
 export async function startScan(page: Page): Promise<boolean> {
   const scanForm = page.locator('form').filter({ has: page.locator('input[name="security_scanner_action"][value="start_scan"]') });
-  
+
   // Submit the form.
   await scanForm.locator('button[type="submit"]').click({ force: true });
 
   // Wait for the PRG redirect to finish.
   await page.waitForLoadState('load', { timeout: 15_000 });
 
-  // The .llar-status section starts with hidden attribute; JS removes it.
-  // Wait for the section to become present and visible (JS-triggered).
+  // The scan UI reveals .llar-status when the job starts. When it never
+  // appears, an error notice must explain why the scan was blocked.
+  const status = page.locator('.llar-status');
   try {
-    const status = page.locator('.llar-status');
-    await status.waitFor({ state: 'attached', timeout: 5000 });
-    // JS sets hidden=false after load — give it a moment.
-    // The script runs on DOMContentLoaded and may need a tick.
-    await page.waitForTimeout(500);
-    const isVisible = await page.evaluate(
-      () => !!(document.querySelector('.llar-status') as HTMLElement)?.offsetParent
-    );
-    if (isVisible) return true;
+    await expect(status).toBeVisible({ timeout: 10_000 });
+    return true;
   } catch {
     const notice = page.locator('.security-scanner-notice.notice-error');
     if (await notice.count() > 0) {
@@ -310,10 +466,28 @@ export async function startScan(page: Page): Promise<boolean> {
     }
     return false;
   }
+}
 
-  // Status section attached but not visible (scan may have completed instantly
-  // or been blocked by a notice without the .notice-error class).
-  return false;
+/**
+ * Waits until the progress label carries BOTH the file-count pair and the
+ * byte-size pair ("42% · 3/5 · 1.2 KB / 2.8 MB").
+ *
+ * Event-driven replacement for a fixed sleep: the label only reaches this
+ * shape after the first poll response has been rendered, which is exactly
+ * the moment the old waitForTimeout tried to guess.
+ */
+export async function waitForProgressLabel(page: Page): Promise<string> {
+  let label = '';
+  await expect
+    .poll(
+      async () => {
+        label = await getProgressLabel(page);
+        return getProgressFileCount(label) !== null && parseProgressBytes(label) !== null;
+      },
+      { timeout: 30_000 },
+    )
+    .toBe(true);
+  return label;
 }
 
 /**
@@ -525,15 +699,28 @@ export async function isSuspiciousOnlyChecked(page: Page): Promise<boolean> {
 
 /**
  * Toggles the "Show suspicious only" checkbox.
+ *
+ * The filter applies synchronously in the change handler — assertions after
+ * the toggle use expect.poll where a transition is expected.
  */
 export async function toggleSuspiciousOnly(page: Page): Promise<void> {
   await page.locator('#llar-only-suspicious').click({ force: true });
-  await page.waitForTimeout(200);
 }
 
 // ---------------------------------------------------------------------------
 // Notices
 // ---------------------------------------------------------------------------
+
+/**
+ * Waits for an admin notice of the given type to be rendered.
+ *
+ * The PRG redirect re-renders the page, so the notice arrives with the
+ * navigation — waiting on the locator removes any fixed delays.
+ */
+export async function waitForNotice(page: Page, type?: 'success' | 'error'): Promise<void> {
+  const cls = type === 'success' ? '.notice-success' : type === 'error' ? '.notice-error' : '';
+  await page.locator(`.security-scanner-notice${cls}`).first().waitFor({ state: 'visible', timeout: 10_000 });
+}
 
 /**
  * Returns the text content of the admin notice.
