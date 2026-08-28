@@ -43,7 +43,9 @@ final class LicensingService {
 	 * Registers the site and stores the returned credentials.
 	 *
 	 * The returned notice message is plain text; the caller must escape it for
-	 * the output context (it carries no markup).
+	 * the output context (it carries no markup). On HTTP 400 the API-provided
+	 * error text is surfaced verbatim, so the message may come straight from
+	 * the remote service.
 	 *
 	 * @param string $domain Site domain.
 	 * @param string $email  Owner email.
@@ -78,7 +80,7 @@ final class LicensingService {
 		if ( 400 === $resp['code'] ) {
 			return array(
 				'type'    => 'error',
-				'message' => __( 'This domain is already registered. Paste the site key in the field below and save it manually.', 'security-scanner' ),
+				'message' => $this->api_error_message( $resp['body'] ),
 			);
 		}
 
@@ -102,5 +104,38 @@ final class LicensingService {
 				(string) ( $body['plan'] ?? 'free' )
 			),
 		);
+	}
+
+	/**
+	 * Builds the notice text for an HTTP 400 registration rejection.
+	 *
+	 * The API's own reason is surfaced as-is (mock: `error`, live API:
+	 * `message`) so a server-side failure shows its real cause instead of a
+	 * misleading "already registered". Only a genuine duplicate-domain
+	 * rejection keeps the paste-key hint; a body without a readable reason
+	 * falls back to a generic message.
+	 *
+	 * @param array<string, mixed> $body Decoded response body.
+	 * @return string Plain-text notice message.
+	 */
+	private function api_error_message( array $body ): string {
+		$text = '';
+
+		foreach ( array( 'error', 'message' ) as $key ) {
+			if ( isset( $body[ $key ] ) && is_string( $body[ $key ] ) && '' !== trim( $body[ $key ] ) ) {
+				$text = trim( $body[ $key ] );
+				break;
+			}
+		}
+
+		if ( '' === $text ) {
+			return __( 'Registration failed. Please try again.', 'security-scanner' );
+		}
+
+		if ( false !== stripos( $text, 'already' ) ) {
+			return rtrim( $text, ' .' ) . '. ' . __( 'Paste the site key in the field below and save it manually.', 'security-scanner' );
+		}
+
+		return $text;
 	}
 }
