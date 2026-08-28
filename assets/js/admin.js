@@ -30,6 +30,9 @@
       if (termsRow) {
         termsRow.hidden = !isRegisterMode();
       }
+      if (termsCheckbox) {
+        termsCheckbox.required = isRegisterMode();
+      }
       updateSubmitState();
     }
     keyField.addEventListener("input", updateKeyBtn);
@@ -118,65 +121,10 @@
     scrollIntoView(target || section);
   }
 
-  // wp-content/plugins/security-scanner/assets/js/src/stopScan.js
-  function initStopScan() {
-    const stopBtn = document.querySelector(".llar-scan-actions__stop");
-    if (!stopBtn) {
-      return;
-    }
-    stopBtn.addEventListener("click", function() {
-      const statusSection = document.querySelector(".llar-status");
-      const progressLabel = statusSection && statusSection.querySelector(".llar-progress__label");
-      const stoppedText = CFG.i18n && CFG.i18n.stopped || "Scan stopped.";
-      stopBtn.disabled = true;
-      if (progressLabel) {
-        progressLabel.textContent = CFG.i18n && CFG.i18n.stopping || "Stopping\u2026";
-      }
-      fetchJSON("security_scanner_stop", {}).then(function() {
-        window.__llarStopped = true;
-        if (statusSection) {
-          statusSection.hidden = true;
-        }
-        stopBtn.disabled = true;
-        const startBtn = document.querySelector(".llar-scan-actions__start");
-        if (startBtn) {
-          startBtn.disabled = false;
-        }
-        const wrap = document.querySelector(".wrap.security-scanner");
-        if (wrap && wrap.parentNode) {
-          const notice = document.createElement("div");
-          notice.className = "notice notice-info is-dismissible";
-          const p = document.createElement("p");
-          p.textContent = stoppedText;
-          notice.appendChild(p);
-          wrap.parentNode.insertBefore(notice, wrap);
-          scrollIntoView(notice);
-        }
-      }).catch(function() {
-        stopBtn.disabled = false;
-        if (progressLabel) {
-          progressLabel.textContent = CFG.i18n ? CFG.i18n.error : "error";
-        }
-      });
-    });
-  }
-
-  // wp-content/plugins/security-scanner/assets/js/src/startForm.js
-  function initStartForm() {
-    const startForm = document.querySelector(".llar-start-form");
-    const startBtn = document.querySelector(".llar-scan-actions__start");
-    if (!startForm || !startBtn) {
-      return;
-    }
-    startForm.addEventListener("submit", function() {
-      startBtn.classList.add("is-loading");
-      startBtn.disabled = true;
-    });
-  }
-
   // wp-content/plugins/security-scanner/assets/js/src/dirTree.js
   var dirTreeEl = document.querySelector(".llar-dirtree");
   var treeFlags = {};
+  var dirTreeLocked = false;
   var registerRowRef = null;
   var syncAllRef = null;
   if (dirTreeEl) {
@@ -185,6 +133,9 @@
     } catch (e) {
       treeFlags = {};
     }
+  }
+  function setDirTreeLocked(locked) {
+    dirTreeLocked = !!locked;
   }
   function treeEffective(rel) {
     const segs = rel ? rel.split("/") : [];
@@ -315,6 +266,11 @@
       const toggle = row.children[0];
       const kids = row.lastElementChild && "UL" === row.lastElementChild.tagName ? row.lastElementChild : null;
       if (input) {
+        input.addEventListener("click", function(event) {
+          if (dirTreeLocked && input.checked) {
+            event.preventDefault();
+          }
+        });
         input.addEventListener("change", function() {
           onRowToggle(rel, input.checked);
         });
@@ -442,6 +398,64 @@
   }
   function cssEscape(value) {
     return window.CSS && CSS.escape ? CSS.escape(value) : value.replace(/"/g, '\\"');
+  }
+
+  // wp-content/plugins/security-scanner/assets/js/src/stopScan.js
+  function initStopScan() {
+    const stopBtn = document.querySelector(".llar-scan-actions__stop");
+    if (!stopBtn) {
+      return;
+    }
+    stopBtn.addEventListener("click", function() {
+      const statusSection = document.querySelector(".llar-status");
+      const progressLabel = statusSection && statusSection.querySelector(".llar-progress__label");
+      const stoppedText = CFG.i18n && CFG.i18n.stopped || "Scan stopped.";
+      stopBtn.disabled = true;
+      if (progressLabel) {
+        progressLabel.textContent = CFG.i18n && CFG.i18n.stopping || "Stopping\u2026";
+      }
+      fetchJSON("security_scanner_stop", {}).then(function() {
+        window.__llarStopped = true;
+        setDirTreeLocked(false);
+        if (statusSection) {
+          statusSection.hidden = true;
+        }
+        stopBtn.disabled = true;
+        const startBtn = document.querySelector(".llar-scan-actions__start");
+        if (startBtn) {
+          startBtn.disabled = false;
+        }
+        const wrap = document.querySelector(".wrap.security-scanner");
+        if (wrap && wrap.parentNode) {
+          const notice = document.createElement("div");
+          notice.className = "notice notice-info is-dismissible";
+          const p = document.createElement("p");
+          p.textContent = stoppedText;
+          notice.appendChild(p);
+          wrap.parentNode.insertBefore(notice, wrap);
+          scrollIntoView(notice);
+        }
+      }).catch(function() {
+        stopBtn.disabled = false;
+        if (progressLabel) {
+          progressLabel.textContent = CFG.i18n ? CFG.i18n.error : "error";
+        }
+      });
+    });
+  }
+
+  // wp-content/plugins/security-scanner/assets/js/src/startForm.js
+  function initStartForm() {
+    const startForm = document.querySelector(".llar-start-form");
+    const startBtn = document.querySelector(".llar-scan-actions__start");
+    if (!startForm || !startBtn) {
+      return;
+    }
+    startForm.addEventListener("submit", function() {
+      setDirTreeLocked(true);
+      startBtn.classList.add("is-loading");
+      startBtn.disabled = true;
+    });
   }
 
   // wp-content/plugins/security-scanner/assets/js/src/fileTree.js
@@ -807,6 +821,7 @@
       return;
     }
     revealIntoView(statusSection);
+    setDirTreeLocked(true);
     const progressBar = statusSection.querySelector(".llar-progress__bar");
     const progressLabel = statusSection.querySelector(".llar-progress__label");
     let samples = [];
@@ -856,6 +871,7 @@
         return;
       }
       statusSection.hidden = true;
+      setDirTreeLocked(false);
       if (stopBtn) {
         stopBtn.disabled = true;
       }

@@ -13,6 +13,8 @@ import { fetchJSON } from './ajax.js';
 
 const dirTreeEl = document.querySelector( '.llar-dirtree' );
 let treeFlags = {};
+/** When true, directory checkboxes cannot be unchecked (active scan). */
+let dirTreeLocked = false;
 // Wiring hooks set by initDirTree() so materializeFolder() can register
 // synthetic rows with the same cascade/lazy-load handlers (null until init).
 let registerRowRef = null;
@@ -24,6 +26,15 @@ if ( dirTreeEl ) {
 	} catch ( e ) {
 		treeFlags = {};
 	}
+}
+
+/**
+ * Locks or unlocks unchecking directory toggles while a scan is running.
+ *
+ * @param {boolean} locked
+ */
+export function setDirTreeLocked( locked ) {
+	dirTreeLocked = !! locked;
 }
 
 /**
@@ -196,6 +207,13 @@ export function initDirTree( onChange ) {
 		const kids = row.lastElementChild && 'UL' === row.lastElementChild.tagName ? row.lastElementChild : null;
 
 		if ( input ) {
+			input.addEventListener( 'click', function ( event ) {
+				// Checked → unchecked is blocked for the scan duration; checking
+				// and indeterminate → checked remain allowed.
+				if ( dirTreeLocked && input.checked ) {
+					event.preventDefault();
+				}
+			} );
 			input.addEventListener( 'change', function () {
 				onRowToggle( rel, input.checked );
 			} );

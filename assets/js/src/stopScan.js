@@ -6,6 +6,7 @@
 import { CFG } from './config.js';
 import { fetchJSON } from './ajax.js';
 import { scrollIntoView } from './viewport.js';
+import { setDirTreeLocked } from './dirTree.js';
 
 export function initStopScan() {
 	const stopBtn = document.querySelector( '.llar-scan-actions__stop' );
@@ -28,6 +29,7 @@ export function initStopScan() {
 			.then( function () {
 				// The poller checks `stopped` via window.__llarStopped.
 				window.__llarStopped = true;
+				setDirTreeLocked( false );
 				if ( statusSection ) {
 					statusSection.hidden = true;
 				}

@@ -4,6 +4,8 @@
  * first status poll returns, so this is the user's feedback during that
  * gap.
  */
+import { setDirTreeLocked } from './dirTree.js';
+
 export function initStartForm() {
 	const startForm = document.querySelector( '.llar-start-form' );
 	const startBtn = document.querySelector( '.llar-scan-actions__start' );
@@ -12,6 +14,7 @@ export function initStartForm() {
 	}
 
 	startForm.addEventListener( 'submit', function () {
+		setDirTreeLocked( true );
 		startBtn.classList.add( 'is-loading' );
 		startBtn.disabled = true;
 	} );

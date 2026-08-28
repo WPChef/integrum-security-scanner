@@ -683,6 +683,47 @@ final class AdminController {
 	}
 
 	/**
+	 * Lists immediate child directories, including dot-prefixed ones.
+	 *
+	 * glob() skips hidden entries on Unix; scandir() does not.
+	 *
+	 * @param string $abs Absolute directory path.
+	 * @return string[] Absolute child directory paths.
+	 */
+	private function list_child_directories( string $abs ): array {
+		if ( ! is_dir( $abs ) ) {
+			return array();
+		}
+
+		$entries = scandir( $abs );
+		if ( false === $entries ) {
+			return array();
+		}
+
+		$out = array();
+		foreach ( $entries as $entry ) {
+			if ( '.' === $entry || '..' === $entry ) {
+				continue;
+			}
+			$path = $abs . DIRECTORY_SEPARATOR . $entry;
+			if ( is_dir( $path ) ) {
+				$out[] = $path;
+			}
+		}
+
+		return $out;
+	}
+
+	/**
+	 * True when $abs has at least one child directory (including dot-prefixed).
+	 *
+	 * @param string $abs Absolute directory path.
+	 */
+	private function directory_has_child_dirs( string $abs ): bool {
+		return array() !== $this->list_child_directories( $abs );
+	}
+
+	/**
 	 * Lists the child directories of a tree node for the selector UI.
 	 *
 	 * @param string $rel Relative parent path ('' = site root).
@@ -697,14 +738,14 @@ final class AdminController {
 		$options = $this->directory_options();
 		$rows    = array();
 
-		foreach ( (array) glob( $abs . '/*', GLOB_ONLYDIR ) as $path ) {
+		foreach ( $this->list_child_directories( $abs ) as $path ) {
 			$slug = array_search( $path, $options, true );
 
 			$rows[] = array(
 				'rel'          => '' === $rel ? basename( $path ) : $rel . '/' . basename( $path ),
 				'name'         => basename( $path ),
 				'slug'         => false !== $slug ? (string) $slug : '',
-				'has_children' => array() !== glob( $path . '/*', GLOB_ONLYDIR ),
+				'has_children' => $this->directory_has_child_dirs( $path ),
 			);
 		}
 
@@ -809,7 +850,7 @@ final class AdminController {
 		}
 
 		// Node OFF: descend only along branches that contain explicit ON flags.
-		foreach ( (array) glob( $abs . '/*', GLOB_ONLYDIR ) as $child ) {
+		foreach ( $this->list_child_directories( $abs ) as $child ) {
 			$child_rel = '' === $rel ? basename( $child ) : $rel . '/' . basename( $child );
 			if ( $this->tree_eff_off( $child_rel, $flags ) && ! $this->has_true_below( $child_rel, $flags ) ) {
 				continue;

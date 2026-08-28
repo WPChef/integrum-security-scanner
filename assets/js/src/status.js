@@ -7,6 +7,7 @@ import { fetchJSON } from './ajax.js';
 import { formatBytes, formatDuration } from './format.js';
 import { revealIntoView } from './viewport.js';
 import { loadResults } from './results.js';
+import { setDirTreeLocked } from './dirTree.js';
 
 const STATUS_INTERVAL_MS = 4000;
 const STATUSES_DONE = [ 'completed', 'done', 'failed' ];
@@ -53,6 +54,7 @@ export function initPolling( jobId ) {
 	}
 
 	revealIntoView( statusSection );
+	setDirTreeLocked( true );
 
 	const progressBar = statusSection.querySelector( '.llar-progress__bar' );
 	const progressLabel = statusSection.querySelector( '.llar-progress__label' );
@@ -130,6 +132,7 @@ export function initPolling( jobId ) {
 		}
 
 		statusSection.hidden = true;
+		setDirTreeLocked( false );
 		if ( stopBtn ) {
 			stopBtn.disabled = true;
 		}
