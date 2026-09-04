@@ -8,6 +8,7 @@ import { formatBytes, formatDuration } from './format.js';
 import { revealIntoView } from './viewport.js';
 import { loadResults } from './results.js';
 import { setDirTreeLocked } from './dirTree.js';
+import { refreshHistory } from './history.js';
 
 const STATUS_INTERVAL_MS = 4000;
 const STATUSES_DONE = [ 'completed', 'done', 'failed' ];
@@ -142,6 +143,9 @@ export function initPolling( jobId ) {
 		hideScanNotice( statusSection );
 		loadResults( jobId ).then( function ( rows ) {
 			showSummary( statusSection, status, rows );
+			// The history table at the bottom gains a row for this run without a
+			// page reload (the server archived it when completion was observed).
+			refreshHistory();
 		} );
 	}
 

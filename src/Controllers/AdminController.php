@@ -14,6 +14,7 @@ use Llar\SecurityScanner\Contracts\FileCollectorInterface;
 use Llar\SecurityScanner\Contracts\LoggerInterface;
 use Llar\SecurityScanner\Contracts\ScanException;
 use Llar\SecurityScanner\Contracts\ScannerInterface;
+use Llar\SecurityScanner\Models\ScanHistoryStorage;
 use Llar\SecurityScanner\Models\ScanResult;
 use Llar\SecurityScanner\Services\LicensingService;
 
@@ -45,14 +46,17 @@ final class AdminController {
 	 * @param LicensingService           $licensing Licensing service.
 	 * @param LoggerInterface            $logger   Logger.
 	 * @param FileCollectorInterface     $file_collector Candidate file list builder (scan preview).
+	 * @param ScanHistoryStorage|null    $history  Finished-run history (defaults to a new store).
 	 */
 	public function __construct(
 		private ScannerInterface $scanner,
 		private CredentialStorageInterface $storage,
 		private LicensingService $licensing,
 		private LoggerInterface $logger,
-		private FileCollectorInterface $file_collector
+		private FileCollectorInterface $file_collector,
+		private ?ScanHistoryStorage $history = null
 	) {
+		$this->history = $this->history ?? new ScanHistoryStorage();
 	}
 
 	/**
@@ -68,6 +72,7 @@ final class AdminController {
 		add_action( 'wp_ajax_security_scanner_results', array( $this, 'ajax_results' ) );
 		add_action( 'wp_ajax_security_scanner_preview', array( $this, 'ajax_preview' ) );
 		add_action( 'wp_ajax_security_scanner_dirchildren', array( $this, 'ajax_dirchildren' ) );
+		add_action( 'wp_ajax_security_scanner_history', array( $this, 'ajax_history' ) );
 	}
 
 	/**
@@ -132,22 +137,42 @@ final class AdminController {
 				'ajaxUrl' => admin_url( 'admin-ajax.php' ),
 				'nonce'   => wp_create_nonce( self::NONCE_POLL ),
 				'i18n'    => array(
-					'error'         => __( 'Scan failed. Please try again.', 'security-scanner' ),
-					'saveKey'       => __( 'Save key', 'security-scanner' ),
-					'register'      => __( 'Register', 'security-scanner' ),
-					'showKey'       => __( 'Show site key', 'security-scanner' ),
-					'hideKey'       => __( 'Hide site key', 'security-scanner' ),
-					'stopped'       => __( 'Scan stopped.', 'security-scanner' ),
-					'stopping'      => __( 'Stopping…', 'security-scanner' ),
-					'file'          => __( 'file', 'security-scanner' ),
-					'files'         => __( 'files', 'security-scanner' ),
-					'scanCompleted' => __( 'Scan completed: {scanned} files scanned, {suspicious} suspicious.', 'security-scanner' ),
-					'scanFailed'    => __( 'Scan failed.', 'security-scanner' ),
-					'severity'      => array(
+					'error'          => __( 'Scan failed. Please try again.', 'security-scanner' ),
+					'saveKey'        => __( 'Save key', 'security-scanner' ),
+					'register'       => __( 'Register', 'security-scanner' ),
+					'showKey'        => __( 'Show site key', 'security-scanner' ),
+					'hideKey'        => __( 'Hide site key', 'security-scanner' ),
+					'stopped'        => __( 'Scan stopped.', 'security-scanner' ),
+					'stopping'       => __( 'Stopping…', 'security-scanner' ),
+					'file'           => __( 'file', 'security-scanner' ),
+					'files'          => __( 'files', 'security-scanner' ),
+					'scanCompleted'  => __( 'Scan completed: {scanned} files scanned, {suspicious} suspicious.', 'security-scanner' ),
+					'scanFailed'     => __( 'Scan failed.', 'security-scanner' ),
+					'historyLoading' => __( 'Loading…', 'security-scanner' ),
+					'historyClean'   => __( 'No problem files in this scan.', 'security-scanner' ),
+					'statusLabels'   => array(
+						'infected'   => __( 'infected', 'security-scanner' ),
+						'suspicious' => __( 'suspicious', 'security-scanner' ),
+						'error'      => __( 'error', 'security-scanner' ),
+					),
+					'statusHints'    => array(
+						'infected'   => __( 'Malicious code detected. Back up your site, then replace this file with a clean copy from the original source and check other recently modified files.', 'security-scanner' ),
+						'suspicious' => __( 'Potentially dangerous code detected. Review the file content before deleting anything — obfuscated code can be a false positive.', 'security-scanner' ),
+						'error'      => __( 'The file could not be scanned. Check the server logs and scan again, or review the file manually.', 'security-scanner' ),
+					),
+					'severity'       => array(
 						'critical' => __( 'critical', 'security-scanner' ),
+						'high'     => __( 'high', 'security-scanner' ),
 						'medium'   => __( 'medium', 'security-scanner' ),
 						'low'      => __( 'low', 'security-scanner' ),
 						'info'     => __( 'info', 'security-scanner' ),
+					),
+					'severityHints'  => array(
+						'critical' => __( 'Critical: the file almost certainly contains malware. Replace it with a clean copy immediately.', 'security-scanner' ),
+						'high'     => __( 'High: likely malware. Replace the file with a clean copy from a trusted source.', 'security-scanner' ),
+						'medium'   => __( 'Medium: suspicious code constructs found. Review the file and clean it up if needed.', 'security-scanner' ),
+						'low'      => __( 'Low: minor concerns only. Review the file when convenient.', 'security-scanner' ),
+						'info'     => __( 'Informational finding. No action needed unless it keeps reappearing.', 'security-scanner' ),
 					),
 				),
 			)
@@ -342,6 +367,14 @@ final class AdminController {
 
 		if ( in_array( $status['status'], array( 'completed', 'done', 'failed' ), true ) ) {
 			delete_transient( 'security_scanner_active_job' );
+
+			// Archive the run once, at the moment completion is first observed.
+			// Failed scans are not archived: an empty "0 problems" row would read
+			// as a clean scan. record() is idempotent per job, so a repeat poll
+			// (or the results fetch racing it) cannot duplicate the entry.
+			if ( in_array( $status['status'], array( 'completed', 'done' ), true ) ) {
+				$this->record_history( $job_id, $status );
+			}
 		}
 
 		wp_send_json_success( $status );
@@ -365,6 +398,73 @@ final class AdminController {
 		delete_transient( 'security_scanner_active_job' );
 
 		wp_send_json_success( array( 'status' => 'stopped' ) );
+	}
+
+	/**
+	 * AJAX: returns the finished-scan history (newest first) for the history
+	 * table: the per-run problem-file tree is fetched lazily from here too.
+	 */
+	public function ajax_history(): void {
+		check_ajax_referer( self::NONCE_POLL, 'nonce' );
+
+		if ( ! current_user_can( self::CAPABILITY ) ) {
+			wp_send_json_error( array( 'message' => 'forbidden' ), 403 );
+		}
+
+		wp_send_json_success( array( 'runs' => $this->history_rows() ) );
+	}
+
+	/**
+	 * Fetches the finished run's verdicts and archives it. Best-effort: a
+	 * failure here must never break the status poll response the UI waits on.
+	 *
+	 * The scanned total comes from the status counters (completed/total), not
+	 * from counting result rows: /results can omit clean files or list nothing
+	 * at all once every action was resolved server-side, which archived real
+	 * runs as "0 files scanned".
+	 *
+	 * @param string               $job_id Job id.
+	 * @param array<string, mixed> $status Last status payload (completed/total counters).
+	 */
+	private function record_history( string $job_id, array $status = array() ): void {
+		try {
+			$results = $this->scanner->get_results( $job_id );
+		} catch ( ScanException $e ) {
+			return;
+		}
+
+		$scanned = max( (int) ( $status['completed'] ?? 0 ), (int) ( $status['total'] ?? 0 ) );
+
+		$this->history->record( $job_id, $results, null, $scanned > 0 ? $scanned : null );
+	}
+
+	/**
+	 * History rows for both the initial page render and the AJAX refresh:
+	 * storage records plus the display-ready date string.
+	 *
+	 * @return array<int, array<string, mixed>>
+	 */
+	private function history_rows(): array {
+		$rows = array();
+		foreach ( $this->history->all() as $run ) {
+			$rows[] = array(
+				'job_id'   => $run['job_id'],
+				'date'     => $this->format_history_date( $run['finished_at'] ),
+				'problems' => $run['problems'],
+				'scanned'  => $run['scanned'],
+				'files'    => $run['files'],
+			);
+		}
+		return $rows;
+	}
+
+	/**
+	 * Renders a run's completion timestamp in the site timezone and locale.
+	 *
+	 * @param int $ts Unix timestamp (UTC).
+	 */
+	private function format_history_date( int $ts ): string {
+		return date_i18n( 'j M Y, H:i', $ts + (int) ( (float) get_option( 'gmt_offset' ) * HOUR_IN_SECONDS ) );
 	}
 
 	/**
@@ -486,6 +586,9 @@ final class AdminController {
 		}
 		unset( $row );
 		$tree_root_on = ! $this->tree_eff_off( '', $tree_flags );
+
+		// Finished runs for the history table at the bottom of the page.
+		$history_rows = $this->history_rows();
 
 		require LLAR_SECURITY_SCANNER_DIR . 'src/Views/page.php';
 	}

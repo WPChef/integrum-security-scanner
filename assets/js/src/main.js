@@ -9,6 +9,7 @@ import { initPreview } from './preview.js';
 import { initPolling } from './status.js';
 import { initResultsFilter } from './results.js';
 import { initNotices } from './notices.js';
+import { refreshHistory } from './history.js';
 
 initKeyForm();
 initStopScan();

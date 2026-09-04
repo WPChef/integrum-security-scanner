@@ -272,6 +272,11 @@
           }
         });
         input.addEventListener("change", function() {
+          if (dirTreeLocked && !input.checked) {
+            syncRow(row);
+            syncHidden();
+            return;
+          }
           onRowToggle(rel, input.checked);
         });
       }
@@ -468,11 +473,27 @@
     nameEl.textContent = name;
     nameEl.title = row.file_path;
     li.appendChild(nameEl);
+    const i18n = CFG.i18n || {};
+    if (row.status && "clean" !== row.status && "pending" !== row.status) {
+      const st = document.createElement("span");
+      st.className = "llar-verdict llar-verdict--" + row.status + " llar-tip";
+      st.textContent = i18n.statusLabels && i18n.statusLabels[row.status] || row.status;
+      st.tabIndex = 0;
+      const stHint = i18n.statusHints && i18n.statusHints[row.status] || "";
+      if (stHint) {
+        st.dataset.tip = stHint;
+      }
+      li.appendChild(st);
+    }
     if (row.severity) {
       const sev = document.createElement("span");
-      sev.className = "llar-sev llar-sev--" + row.severity;
-      const labels = CFG.i18n && CFG.i18n.severity || {};
-      sev.textContent = labels[row.severity] || row.severity;
+      sev.className = "llar-sev llar-sev--" + row.severity + " llar-tip";
+      sev.textContent = i18n.severity && i18n.severity[row.severity] || row.severity;
+      sev.tabIndex = 0;
+      const sevHint = i18n.severityHints && i18n.severityHints[row.severity] || "";
+      if (sevHint) {
+        sev.dataset.tip = sevHint;
+      }
       li.appendChild(sev);
     }
     if (row.threat_type) {
@@ -795,6 +816,158 @@
     return h + "h " + (m > 0 ? m + "m" : "");
   }
 
+  // wp-content/plugins/security-scanner/assets/js/src/history.js
+  var bodyEl = document.querySelector(".llar-history__body");
+  var emptyEl = document.querySelector(".llar-history__empty");
+  var runsCache = null;
+  var fetchPromise = null;
+  function fetchRuns() {
+    if (runsCache) {
+      return Promise.resolve(runsCache);
+    }
+    if (!fetchPromise) {
+      fetchPromise = fetchJSON("security_scanner_history", {}).then(function(payload) {
+        fetchPromise = null;
+        runsCache = payload && payload.data && payload.data.runs || [];
+        return runsCache;
+      }).catch(function() {
+        fetchPromise = null;
+        return [];
+      });
+    }
+    return fetchPromise;
+  }
+  function refreshHistory() {
+    if (!bodyEl) {
+      return;
+    }
+    runsCache = null;
+    fetchRuns().then(renderRuns);
+  }
+  function renderRuns(runs) {
+    bodyEl.textContent = "";
+    runs.forEach(function(run) {
+      bodyEl.appendChild(buildRunRows(run));
+    });
+    if (emptyEl) {
+      emptyEl.hidden = runs.length > 0;
+    }
+  }
+  function buildRunRows(run) {
+    const frag = document.createDocumentFragment();
+    const row = document.createElement("tr");
+    row.className = "llar-history__row";
+    row.dataset.job = run.job_id;
+    row.setAttribute("aria-expanded", "false");
+    const dateTd = document.createElement("td");
+    dateTd.className = "llar-history__td";
+    dateTd.textContent = run.date;
+    row.appendChild(dateTd);
+    const problemsTd = document.createElement("td");
+    problemsTd.className = "llar-history__td";
+    const count = document.createElement("span");
+    count.className = "llar-history__count" + (run.problems > 0 ? " llar-history__count--alert" : " llar-history__count--ok");
+    count.textContent = String(run.problems);
+    problemsTd.appendChild(count);
+    row.appendChild(problemsTd);
+    const scannedTd = document.createElement("td");
+    scannedTd.className = "llar-history__td llar-history__td--muted";
+    scannedTd.textContent = String(run.scanned);
+    row.appendChild(scannedTd);
+    frag.appendChild(row);
+    const detail = document.createElement("tr");
+    detail.className = "llar-history__detail";
+    detail.hidden = true;
+    const detailTd = document.createElement("td");
+    detailTd.colSpan = 3;
+    detailTd.className = "llar-history__detail-td";
+    const tree = document.createElement("div");
+    tree.className = "llar-tree llar-history__tree";
+    tree.dataset.job = run.job_id;
+    detailTd.appendChild(tree);
+    detail.appendChild(detailTd);
+    frag.appendChild(detail);
+    return frag;
+  }
+  function buildTree(files) {
+    const root = document.createElement("ul");
+    root.className = "llar-tree__list is-root";
+    const lists = { "": root };
+    if (!files.length) {
+      const li = document.createElement("li");
+      li.className = "llar-history__no-files";
+      li.textContent = CFG.i18n && CFG.i18n.historyClean || "No problem files in this scan.";
+      root.appendChild(li);
+      return root;
+    }
+    function folderList(rel) {
+      if (lists[rel]) {
+        return lists[rel];
+      }
+      const segs = rel.split("/");
+      const li = document.createElement("li");
+      li.className = "llar-tree__folder";
+      li.dataset.rel = rel;
+      const toggle = document.createElement("span");
+      toggle.className = "llar-tree__toggle";
+      toggle.textContent = "\u25BE";
+      const name = document.createElement("span");
+      name.className = "llar-tree__folder-name";
+      name.textContent = segs[segs.length - 1] + "/";
+      li.appendChild(toggle);
+      li.appendChild(name);
+      const ul = document.createElement("ul");
+      ul.className = "llar-tree__list";
+      li.appendChild(ul);
+      folderList(segs.slice(0, -1).join("/")).appendChild(li);
+      toggle.addEventListener("click", function() {
+        ul.hidden = !ul.hidden;
+        toggle.textContent = ul.hidden ? "\u25B8" : "\u25BE";
+      });
+      lists[rel] = ul;
+      return ul;
+    }
+    files.forEach(function(file) {
+      folderList(dirname(file.file_path)).appendChild(renderFile(file));
+    });
+    return root;
+  }
+  function ensureTree(detail) {
+    const treeEl2 = detail.querySelector(".llar-history__tree");
+    if (!treeEl2 || treeEl2.childElementCount) {
+      return Promise.resolve();
+    }
+    treeEl2.textContent = CFG.i18n && CFG.i18n.historyLoading || "Loading\u2026";
+    return fetchRuns().then(function(runs) {
+      const run = runs.filter(function(r) {
+        return r.job_id === treeEl2.dataset.job;
+      })[0] || null;
+      treeEl2.textContent = "";
+      treeEl2.appendChild(buildTree(run ? run.files : []));
+    });
+  }
+  if (bodyEl) {
+    bodyEl.addEventListener("click", function(event) {
+      const row = event.target.closest ? event.target.closest(".llar-history__row") : null;
+      if (!row) {
+        return;
+      }
+      const detail = row.nextElementSibling;
+      if (!detail || !detail.classList.contains("llar-history__detail")) {
+        return;
+      }
+      if (detail.hidden) {
+        ensureTree(detail).then(function() {
+          detail.hidden = false;
+          row.setAttribute("aria-expanded", "true");
+        });
+      } else {
+        detail.hidden = true;
+        row.setAttribute("aria-expanded", "false");
+      }
+    });
+  }
+
   // wp-content/plugins/security-scanner/assets/js/src/status.js
   var STATUS_INTERVAL_MS = 4e3;
   var STATUSES_DONE = ["completed", "done", "failed"];
@@ -881,6 +1054,7 @@
       hideScanNotice(statusSection);
       loadResults(jobId).then(function(rows) {
         showSummary(statusSection, status, rows);
+        refreshHistory();
       });
     }
     function hideScanNotice(statusSection2) {

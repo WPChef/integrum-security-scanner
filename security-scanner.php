@@ -90,6 +90,13 @@ if ( is_admin() ) {
 	);
 	$licensing = new \Llar\SecurityScanner\Services\LicensingService( $http, $logger, $storage, $llar_base );
 
-	$admin = new \Llar\SecurityScanner\Controllers\AdminController( $scanner, $storage, $licensing, $logger, $file_collector );
+	$admin = new \Llar\SecurityScanner\Controllers\AdminController(
+		$scanner,
+		$storage,
+		$licensing,
+		$logger,
+		$file_collector,
+		new \Llar\SecurityScanner\Models\ScanHistoryStorage()
+	);
 	$admin->register();
 }

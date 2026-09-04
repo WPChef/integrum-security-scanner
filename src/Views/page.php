@@ -26,6 +26,7 @@
  * @var array<string,bool>                          $tree_flags
  * @var array<int, array{rel: string, name: string, slug: string, has_children: bool, checked: bool}> $tree_rows
  * @var bool                                        $tree_root_on
+ * @var array<int, array<string, mixed>>            $history_rows
  */
 
 declare( strict_types = 1 );
@@ -310,6 +311,37 @@ if ( ! defined( 'ABSPATH' ) ) {
 			<?php if ( null !== $notice && 'scan' === $notice['scope'] ) : ?>
 				<?php require LLAR_SECURITY_SCANNER_DIR . 'src/Views/notice.php'; ?>
 			<?php endif; ?>
+		</section>
+
+		<section class="llar-history rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+			<h2 class="!m-0 !mb-1 !text-lg !font-semibold !text-slate-800"><?php esc_html_e( 'Scan history', 'security-scanner' ); ?></h2>
+			<p class="!m-0 !mb-4 text-xs text-slate-500"><?php esc_html_e( 'Past scans, newest first. Click a row to see the files with problems.', 'security-scanner' ); ?></p>
+			<div class="overflow-x-auto">
+				<table class="llar-history__table w-full text-left text-sm">
+					<thead>
+						<tr>
+							<th class="llar-history__th"><?php esc_html_e( 'Date', 'security-scanner' ); ?></th>
+							<th class="llar-history__th"><?php esc_html_e( 'Problems found', 'security-scanner' ); ?></th>
+							<th class="llar-history__th"><?php esc_html_e( 'Files scanned', 'security-scanner' ); ?></th>
+						</tr>
+					</thead>
+					<tbody class="llar-history__body">
+						<?php foreach ( $history_rows as $run ) : ?>
+							<tr class="llar-history__row" data-job="<?php echo esc_attr( $run['job_id'] ); ?>" aria-expanded="false">
+								<td class="llar-history__td"><?php echo esc_html( $run['date'] ); ?></td>
+								<td class="llar-history__td"><span class="llar-history__count<?php echo $run['problems'] > 0 ? ' llar-history__count--alert' : ' llar-history__count--ok'; ?>"><?php echo esc_html( (string) $run['problems'] ); ?></span></td>
+								<td class="llar-history__td llar-history__td--muted"><?php echo esc_html( (string) $run['scanned'] ); ?></td>
+							</tr>
+							<tr class="llar-history__detail" hidden>
+								<td colspan="3" class="llar-history__detail-td">
+									<div class="llar-tree llar-history__tree" data-job="<?php echo esc_attr( $run['job_id'] ); ?>"></div>
+								</td>
+							</tr>
+						<?php endforeach; ?>
+					</tbody>
+				</table>
+			</div>
+			<p class="llar-history__empty !m-0 text-sm text-slate-500" <?php echo array() === $history_rows ? '' : 'hidden'; ?>><?php esc_html_e( 'No scans yet.', 'security-scanner' ); ?></p>
 		</section>
 
 </div>
