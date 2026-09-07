@@ -28,6 +28,22 @@ Malware scanning is provided by Limit Login Attempts Reloaded in partnership wit
 
 Brought to you by the team behind **Limit Login Attempts Reloaded**.
 
+== External services ==
+
+This plugin uses external services to register the site and scan the files selected by the site administrator. Requests are sent only when the administrator registers the site, uses an existing site key, or starts and monitors a scan.
+
+= Limit Login Attempts Reloaded =
+
+The plugin connects to the Limit Login Attempts Reloaded API to register the site and obtain a site key. During registration, it sends the site's domain and the registration email address. An existing site key is not sent to this API for registration; it is used to authenticate the scanning requests described below.
+
+This service is provided by Atlantic Silicon Inc. See the [Terms of Service](https://www.limitloginattempts.com/terms/) and [Privacy Policy](https://www.limitloginattempts.com/privacy-policy/).
+
+= Imunify Connect =
+
+The plugin connects to Imunify Connect to scan the files selected by the site administrator for malware and suspicious code. When a scan starts, it sends the selected files' relative paths, sizes, and modification times. During the scan, it may send SHA-256 hashes and, when requested by the scanning service for further analysis, the contents of selected files. File contents may include personal, confidential, or other protected information. The site key is sent to authenticate these requests. The plugin sends data only for the selected files and only while the scan is running.
+
+This service is provided by Imunify by CloudLinux. See the [Imunify Terms of Use](https://imunify360.com/legal/terms-of-use/), [CloudLinux Privacy Policy](https://cloudlinux.com/clients-privacy-policy/), and [Imunify legal documentation](https://imunify360.com/legal/).
+
 == Installation ==
 
 1. Upload the plugin folder to the `/wp-content/plugins/` directory, or install it through the **Plugins → Add New** screen in WordPress.
