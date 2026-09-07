@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       File Security Scanner
  * Plugin URI:        https://www.limitloginattempts.com/
- * Description:       White-label malware scanner for WordPress.
+ * Description:       Scan your WordPress files for malicious code, right from the dashboard.
  * Version:           0.1.0
  * Requires at least: 6.0
  * Requires PHP:      8.1
