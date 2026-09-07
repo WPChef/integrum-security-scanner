@@ -26,7 +26,7 @@ namespace Llar\SecurityScanner\Models;
  */
 final class ScanHistoryStorage {
 
-	private const OPTION_NAME = 'security_scanner_history';
+	private const OPTION_NAME = 'site_integrity_scanner_history';
 
 	/** How many runs to keep (newest first, older dropped). */
 	private const MAX_RUNS = 20;

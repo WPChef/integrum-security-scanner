@@ -27,7 +27,7 @@ final class OptionsCredentialStorage implements CredentialStorageInterface {
 	 * @param string|null $key Override option key (used in tests).
 	 */
 	public function __construct( ?string $key = null ) {
-		$this->key = $key ?? ( defined( 'LLAR_SECURITY_SCANNER_OPTION_KEY' ) ? LLAR_SECURITY_SCANNER_OPTION_KEY : 'security_scanner_credentials' );
+		$this->key = $key ?? ( defined( 'LLAR_SECURITY_SCANNER_OPTION_KEY' ) ? LLAR_SECURITY_SCANNER_OPTION_KEY : 'site_integrity_scanner_credentials' );
 	}
 
 	/**

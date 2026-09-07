@@ -2,7 +2,7 @@
 
 /* Scope utilities inside the plugin root so they reliably override WP admin
    selectors without leaking into the rest of wp-admin. */
-@variant llar (&:is(#security-scanner-app, #security-scanner-app *));
+@variant llar (&:is(#site-integrity-scanner-app, #site-integrity-scanner-app *));
 
 @theme {
   --color-primary-50: #eef2ff;
@@ -25,7 +25,7 @@
  * badges and scan-progress elements at runtime.
  */
 
-#security-scanner-app {
+#site-integrity-scanner-app {
   --llar-muted: #64748b;
   --llar-danger: #dc2626;
   --llar-tree-hover: #f8fafc;
@@ -33,10 +33,10 @@
 
 /* Spinner on the Start button while the manifest is being built server-side
    and the page has not yet reloaded with the active job. */
-.security-scanner .llar-scan-actions__start.is-loading {
+.site-integrity-scanner .llar-scan-actions__start.is-loading {
   position: relative;
 }
-.security-scanner .llar-scan-actions__start.is-loading::after {
+.site-integrity-scanner .llar-scan-actions__start.is-loading::after {
   content: '';
   display: inline-block;
   width: 14px;
@@ -53,7 +53,7 @@
 }
 
 /* Results tree ----------------------------------------------------------- */
-.security-scanner .llar-tree {
+.site-integrity-scanner .llar-tree {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 13px;
   margin: 0;
@@ -62,21 +62,21 @@
   padding: 0;
 }
 
-.security-scanner .llar-tree__list {
+.site-integrity-scanner .llar-tree__list {
   list-style: none;
   margin: 0;
   padding: 0 0 0 18px;
 }
 
-.security-scanner .llar-tree__list.is-root {
+.site-integrity-scanner .llar-tree__list.is-root {
   padding-left: 0;
 }
 
-.security-scanner .llar-tree__folder {
+.site-integrity-scanner .llar-tree__folder {
   margin: 2px 0;
 }
 
-.security-scanner .llar-tree__toggle {
+.site-integrity-scanner .llar-tree__toggle {
   color: var(--llar-muted);
   cursor: pointer;
   display: inline-block;
@@ -84,48 +84,48 @@
   width: 14px;
 }
 
-.security-scanner .llar-tree__folder-name {
+.site-integrity-scanner .llar-tree__folder-name {
   color: #1e293b;
   font-weight: 600;
 }
 
-.security-scanner .llar-tree__folder-name.has-problems {
+.site-integrity-scanner .llar-tree__folder-name.has-problems {
   color: var(--llar-danger);
 }
 
-.security-scanner .llar-tree__file {
+.site-integrity-scanner .llar-tree__file {
   border-radius: 6px;
   margin: 1px 0 1px 14px;
   padding: 5px 8px;
   transition: background-color .15s ease;
 }
 
-.security-scanner .llar-tree__file:hover {
+.site-integrity-scanner .llar-tree__file:hover {
   background: var(--llar-tree-hover);
 }
 
-.security-scanner .llar-tree__file-name {
+.site-integrity-scanner .llar-tree__file-name {
   color: #334155;
   margin-right: 8px;
 }
 
-.security-scanner .llar-tree__threat {
+.site-integrity-scanner .llar-tree__threat {
   color: var(--llar-muted);
   font-style: normal;
   margin-left: 6px;
 }
 
-.security-scanner .llar-tree__file.is-suspicious {
+.site-integrity-scanner .llar-tree__file.is-suspicious {
   background: #fff7ed;
 }
 
-.security-scanner .llar-tree__file.is-infected {
+.site-integrity-scanner .llar-tree__file.is-infected {
   background: #fef2f2;
   color: #b91c1c;
 }
 
 /* Severity badges -------------------------------------------------------- */
-.security-scanner .llar-sev {
+.site-integrity-scanner .llar-sev {
   border-radius: 9999px;
   color: #fff;
   font-size: 10px;
@@ -136,8 +136,8 @@
   text-transform: uppercase;
 }
 
-.security-scanner .llar-sev--critical { background: #b91c1c; }
-.security-scanner .llar-sev--high     { background: #dc2626; }
-.security-scanner .llar-sev--medium   { background: #d97706; }
-.security-scanner .llar-sev--low      { background: #0284c7; }
-.security-scanner .llar-sev--info     { background: #64748b; }
+.site-integrity-scanner .llar-sev--critical { background: #b91c1c; }
+.site-integrity-scanner .llar-sev--high     { background: #dc2626; }
+.site-integrity-scanner .llar-sev--medium   { background: #d97706; }
+.site-integrity-scanner .llar-sev--low      { background: #0284c7; }
+.site-integrity-scanner .llar-sev--info     { background: #64748b; }

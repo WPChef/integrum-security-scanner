@@ -79,12 +79,12 @@ export function initPreview( treeApi ) {
 		} );
 		const selected = treeApi.getSelectedSlugs();
 
-		fetchJSON( 'security_scanner_preview', {
-			'security_scanner_directories[]': selected,
-			'security_scanner_tree_on[]':     onFlags,
-			'security_scanner_tree_off[]':    offFlags,
-			security_scanner_include:         includeInput ? includeInput.value : '',
-			security_scanner_exclude:         excludeInput ? excludeInput.value : '',
+		fetchJSON( 'site_integrity_scanner_preview', {
+			'site_integrity_scanner_directories[]': selected,
+			'site_integrity_scanner_tree_on[]':     onFlags,
+			'site_integrity_scanner_tree_off[]':    offFlags,
+			site_integrity_scanner_include:         includeInput ? includeInput.value : '',
+			site_integrity_scanner_exclude:         excludeInput ? excludeInput.value : '',
 		} ).then( function ( payload ) {
 			if ( seq !== previewSeq ) {
 				return; // A newer request has already taken over.

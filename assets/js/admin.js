@@ -1,8 +1,8 @@
 (() => {
-  // wp-content/plugins/security-scanner/assets/js/src/config.js
+  // wp-content/plugins/site-integrity-scanner/assets/js/src/config.js
   var CFG = window.llarSecurityScanner || {};
 
-  // wp-content/plugins/security-scanner/assets/js/src/keyForm.js
+  // wp-content/plugins/site-integrity-scanner/assets/js/src/keyForm.js
   function initKeyForm() {
     const keyField = document.getElementById("llar-key");
     const form = keyField && keyField.closest("form");
@@ -81,7 +81,7 @@
     });
   }
 
-  // wp-content/plugins/security-scanner/assets/js/src/ajax.js
+  // wp-content/plugins/site-integrity-scanner/assets/js/src/ajax.js
   function fetchJSON(action, body) {
     const data = new URLSearchParams();
     data.append("action", action);
@@ -106,7 +106,7 @@
     });
   }
 
-  // wp-content/plugins/security-scanner/assets/js/src/viewport.js
+  // wp-content/plugins/site-integrity-scanner/assets/js/src/viewport.js
   function scrollIntoView(el) {
     if (!el) {
       return;
@@ -121,7 +121,7 @@
     scrollIntoView(target || section);
   }
 
-  // wp-content/plugins/security-scanner/assets/js/src/dirTree.js
+  // wp-content/plugins/site-integrity-scanner/assets/js/src/dirTree.js
   var dirTreeEl = document.querySelector(".llar-dirtree");
   var treeFlags = {};
   var dirTreeLocked = false;
@@ -208,7 +208,7 @@
       Object.keys(treeFlags).forEach(function(rel) {
         const input = document.createElement("input");
         input.type = "hidden";
-        input.name = treeFlags[rel] ? "security_scanner_tree_on[]" : "security_scanner_tree_off[]";
+        input.name = treeFlags[rel] ? "site_integrity_scanner_tree_on[]" : "site_integrity_scanner_tree_off[]";
         input.value = rel;
         flagsContainer.appendChild(input);
       });
@@ -244,7 +244,7 @@
       input.type = "checkbox";
       input.className = "rounded border-slate-300 text-primary-600 focus:ring-primary-500";
       if (child.slug) {
-        input.name = "security_scanner_directories[]";
+        input.name = "site_integrity_scanner_directories[]";
         input.value = child.slug;
       }
       label.appendChild(input);
@@ -290,7 +290,7 @@
           toggle.textContent = "\u25BE";
           kids.dataset.loaded = "1";
           kids.hidden = false;
-          fetchJSON("security_scanner_dirchildren", { rel }).then(function(payload) {
+          fetchJSON("site_integrity_scanner_dirchildren", { rel }).then(function(payload) {
             const children = payload && payload.data && payload.data.children || [];
             children.forEach(function(child) {
               if (kids.querySelector(':scope > .llar-dirtree__node[data-rel="' + cssEscape(child.rel) + '"]')) {
@@ -327,7 +327,7 @@
       },
       /** @return {string[]} Checked legacy slug checkboxes (no-JS fallback values). */
       getSelectedSlugs: function() {
-        return Array.prototype.slice.call(dirTreeEl.querySelectorAll('input[name="security_scanner_directories[]"]')).filter(function(cb) {
+        return Array.prototype.slice.call(dirTreeEl.querySelectorAll('input[name="site_integrity_scanner_directories[]"]')).filter(function(cb) {
           return cb.checked;
         }).map(function(cb) {
           return cb.value;
@@ -405,7 +405,7 @@
     return window.CSS && CSS.escape ? CSS.escape(value) : value.replace(/"/g, '\\"');
   }
 
-  // wp-content/plugins/security-scanner/assets/js/src/stopScan.js
+  // wp-content/plugins/site-integrity-scanner/assets/js/src/stopScan.js
   function initStopScan() {
     const stopBtn = document.querySelector(".llar-scan-actions__stop");
     if (!stopBtn) {
@@ -419,7 +419,7 @@
       if (progressLabel) {
         progressLabel.textContent = CFG.i18n && CFG.i18n.stopping || "Stopping\u2026";
       }
-      fetchJSON("security_scanner_stop", {}).then(function() {
+      fetchJSON("site_integrity_scanner_stop", {}).then(function() {
         window.__llarStopped = true;
         setDirTreeLocked(false);
         if (statusSection) {
@@ -430,7 +430,7 @@
         if (startBtn) {
           startBtn.disabled = false;
         }
-        const wrap = document.querySelector(".wrap.security-scanner");
+        const wrap = document.querySelector(".wrap.site-integrity-scanner");
         if (wrap && wrap.parentNode) {
           const notice = document.createElement("div");
           notice.className = "notice notice-info is-dismissible";
@@ -449,7 +449,7 @@
     });
   }
 
-  // wp-content/plugins/security-scanner/assets/js/src/startForm.js
+  // wp-content/plugins/site-integrity-scanner/assets/js/src/startForm.js
   function initStartForm() {
     const startForm = document.querySelector(".llar-start-form");
     const startBtn = document.querySelector(".llar-scan-actions__start");
@@ -463,7 +463,7 @@
     });
   }
 
-  // wp-content/plugins/security-scanner/assets/js/src/fileTree.js
+  // wp-content/plugins/site-integrity-scanner/assets/js/src/fileTree.js
   function renderFile(row) {
     const li = document.createElement("li");
     li.className = "llar-tree__file" + fileStatusClass(row);
@@ -552,12 +552,12 @@
     return "clean" !== row.status ? " is-suspicious" : " is-clean";
   }
 
-  // wp-content/plugins/security-scanner/assets/js/src/results.js
+  // wp-content/plugins/site-integrity-scanner/assets/js/src/results.js
   var treeEl = document.querySelector(".llar-dirtree");
   var filterWrap = document.getElementById("llar-only-suspicious-wrap");
   var onlySuspicious = document.getElementById("llar-only-suspicious");
   function loadResults(jobId) {
-    return fetchJSON("security_scanner_results", { job_id: jobId }).then(function(payload) {
+    return fetchJSON("site_integrity_scanner_results", { job_id: jobId }).then(function(payload) {
       const rows = payload && payload.data && payload.data.results || [];
       attachResults(rows);
       return rows;
@@ -704,7 +704,7 @@
     }
   }
 
-  // wp-content/plugins/security-scanner/assets/js/src/preview.js
+  // wp-content/plugins/site-integrity-scanner/assets/js/src/preview.js
   function initPreview(treeApi2) {
     const previewCount = document.querySelector(".llar-preview__count");
     const previewEmpty = document.querySelector(".llar-preview__empty");
@@ -754,12 +754,12 @@
         (flags[rel] ? onFlags : offFlags).push(rel);
       });
       const selected = treeApi2.getSelectedSlugs();
-      fetchJSON("security_scanner_preview", {
-        "security_scanner_directories[]": selected,
-        "security_scanner_tree_on[]": onFlags,
-        "security_scanner_tree_off[]": offFlags,
-        security_scanner_include: includeInput ? includeInput.value : "",
-        security_scanner_exclude: excludeInput ? excludeInput.value : ""
+      fetchJSON("site_integrity_scanner_preview", {
+        "site_integrity_scanner_directories[]": selected,
+        "site_integrity_scanner_tree_on[]": onFlags,
+        "site_integrity_scanner_tree_off[]": offFlags,
+        site_integrity_scanner_include: includeInput ? includeInput.value : "",
+        site_integrity_scanner_exclude: excludeInput ? excludeInput.value : ""
       }).then(function(payload) {
         if (seq !== previewSeq) {
           return;
@@ -790,7 +790,7 @@
     return { schedule };
   }
 
-  // wp-content/plugins/security-scanner/assets/js/src/format.js
+  // wp-content/plugins/site-integrity-scanner/assets/js/src/format.js
   function formatBytes(bytes) {
     if (bytes < 1024) {
       return bytes + " B";
@@ -816,7 +816,7 @@
     return h + "h " + (m > 0 ? m + "m" : "");
   }
 
-  // wp-content/plugins/security-scanner/assets/js/src/history.js
+  // wp-content/plugins/site-integrity-scanner/assets/js/src/history.js
   var bodyEl = document.querySelector(".llar-history__body");
   var emptyEl = document.querySelector(".llar-history__empty");
   var runsCache = null;
@@ -826,7 +826,7 @@
       return Promise.resolve(runsCache);
     }
     if (!fetchPromise) {
-      fetchPromise = fetchJSON("security_scanner_history", {}).then(function(payload) {
+      fetchPromise = fetchJSON("site_integrity_scanner_history", {}).then(function(payload) {
         fetchPromise = null;
         runsCache = payload && payload.data && payload.data.runs || [];
         return runsCache;
@@ -968,7 +968,7 @@
     });
   }
 
-  // wp-content/plugins/security-scanner/assets/js/src/status.js
+  // wp-content/plugins/site-integrity-scanner/assets/js/src/status.js
   var STATUS_INTERVAL_MS = 4e3;
   var STATUSES_DONE = ["completed", "done", "failed"];
   function computeEta(window2, scanned, total) {
@@ -999,7 +999,7 @@
     const progressLabel = statusSection.querySelector(".llar-progress__label");
     let samples = [];
     function pollStatus() {
-      fetchJSON("security_scanner_status", { job_id: jobId }).then(onStatus).catch(function() {
+      fetchJSON("site_integrity_scanner_status", { job_id: jobId }).then(onStatus).catch(function() {
         progressLabel.textContent = CFG.i18n ? CFG.i18n.error : "error";
       });
     }
@@ -1063,7 +1063,7 @@
         return;
       }
       Array.prototype.forEach.call(
-        section.querySelectorAll(".security-scanner-notice"),
+        section.querySelectorAll(".site-integrity-scanner-notice"),
         function(notice) {
           notice.hidden = true;
         }
@@ -1094,9 +1094,9 @@
     pollStatus();
   }
 
-  // wp-content/plugins/security-scanner/assets/js/src/notices.js
+  // wp-content/plugins/site-integrity-scanner/assets/js/src/notices.js
   function initNotices() {
-    const notice = document.querySelector(".security-scanner-notice");
+    const notice = document.querySelector(".site-integrity-scanner-notice");
     if (!notice) {
       return;
     }
@@ -1107,7 +1107,7 @@
     scrollIntoView(notice);
   }
 
-  // wp-content/plugins/security-scanner/assets/js/src/main.js
+  // wp-content/plugins/site-integrity-scanner/assets/js/src/main.js
   initKeyForm();
   initStopScan();
   initStartForm();

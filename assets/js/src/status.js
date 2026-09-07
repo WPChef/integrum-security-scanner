@@ -66,7 +66,7 @@ export function initPolling( jobId ) {
 	let samples = [];
 
 	function pollStatus() {
-		fetchJSON( 'security_scanner_status', { job_id: jobId } )
+		fetchJSON( 'site_integrity_scanner_status', { job_id: jobId } )
 			.then( onStatus )
 			.catch( function () {
 				progressLabel.textContent = CFG.i18n ? CFG.i18n.error : 'error';
@@ -163,7 +163,7 @@ export function initPolling( jobId ) {
 			return;
 		}
 		Array.prototype.forEach.call(
-			section.querySelectorAll( '.security-scanner-notice' ),
+			section.querySelectorAll( '.site-integrity-scanner-notice' ),
 			function ( notice ) {
 				notice.hidden = true;
 			}

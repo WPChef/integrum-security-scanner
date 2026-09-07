@@ -55,7 +55,7 @@ final class LicensingService {
 		if ( '' === $domain || ! is_email( $email ) ) {
 			return array(
 				'type'    => 'error',
-				'message' => __( 'Please provide a valid email address.', 'security-scanner' ),
+				'message' => __( 'Please provide a valid email address.', 'site-integrity-scanner' ),
 			);
 		}
 
@@ -73,7 +73,7 @@ final class LicensingService {
 
 			return array(
 				'type'    => 'error',
-				'message' => __( 'Could not reach the licensing service. Please try again.', 'security-scanner' ),
+				'message' => __( 'Could not reach the licensing service. Please try again.', 'site-integrity-scanner' ),
 			);
 		}
 
@@ -89,7 +89,7 @@ final class LicensingService {
 
 			return array(
 				'type'    => 'error',
-				'message' => __( 'Could not obtain a site key. Please try again.', 'security-scanner' ),
+				'message' => __( 'Could not obtain a site key. Please try again.', 'site-integrity-scanner' ),
 			);
 		}
 
@@ -100,7 +100,7 @@ final class LicensingService {
 			'type'    => 'success',
 			'message' => sprintf(
 				/* translators: %s: plan name. */
-				__( 'Site registered. Plan: %s.', 'security-scanner' ),
+				__( 'Site registered. Plan: %s.', 'site-integrity-scanner' ),
 				(string) ( $body['plan'] ?? 'free' )
 			),
 		);
@@ -129,11 +129,11 @@ final class LicensingService {
 		}
 
 		if ( '' === $text ) {
-			return __( 'Registration failed. Please try again.', 'security-scanner' );
+			return __( 'Registration failed. Please try again.', 'site-integrity-scanner' );
 		}
 
 		if ( false !== stripos( $text, 'already' ) ) {
-			return rtrim( $text, ' .' ) . '. ' . __( 'Paste the site key in the field below and save it manually.', 'security-scanner' );
+			return rtrim( $text, ' .' ) . '. ' . __( 'Paste the site key in the field below and save it manually.', 'site-integrity-scanner' );
 		}
 
 		return $text;

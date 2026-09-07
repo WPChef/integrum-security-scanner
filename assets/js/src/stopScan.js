@@ -25,7 +25,7 @@ export function initStopScan() {
 			progressLabel.textContent = ( CFG.i18n && CFG.i18n.stopping ) || 'Stopping…';
 		}
 
-		fetchJSON( 'security_scanner_stop', {} )
+		fetchJSON( 'site_integrity_scanner_stop', {} )
 			.then( function () {
 				// The poller checks `stopped` via window.__llarStopped.
 				window.__llarStopped = true;
@@ -39,7 +39,7 @@ export function initStopScan() {
 					startBtn.disabled = false;
 				}
 
-				const wrap = document.querySelector( '.wrap.security-scanner' );
+				const wrap = document.querySelector( '.wrap.site-integrity-scanner' );
 				if ( wrap && wrap.parentNode ) {
 					const notice = document.createElement( 'div' );
 					notice.className = 'notice notice-info is-dismissible';

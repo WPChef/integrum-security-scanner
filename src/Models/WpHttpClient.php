@@ -85,7 +85,7 @@ final class WpHttpClient implements HttpClientInterface {
 		// Content-Type: application/x-www-form-urlencoded, which the scanner
 		// rejects with HTTP 415. We therefore build a real multipart/form-data
 		// body by hand and pin the Content-Type with a boundary we control.
-		$boundary = 'security-scanner-' . wp_generate_password( 16, false );
+		$boundary = 'site-integrity-scanner-' . wp_generate_password( 16, false );
 		$eol      = "\r\n";
 
 		$body  = '--' . $boundary . $eol;

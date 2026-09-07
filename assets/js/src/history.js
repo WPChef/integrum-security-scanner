@@ -30,7 +30,7 @@ function fetchRuns() {
 		return Promise.resolve( runsCache );
 	}
 	if ( ! fetchPromise ) {
-		fetchPromise = fetchJSON( 'security_scanner_history', {} )
+		fetchPromise = fetchJSON( 'site_integrity_scanner_history', {} )
 			.then( function ( payload ) {
 				fetchPromise = null;
 				runsCache = ( payload && payload.data && payload.data.runs ) || [];

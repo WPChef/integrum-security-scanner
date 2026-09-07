@@ -24,12 +24,12 @@ use Llar\SecurityScanner\Services\LicensingService;
  */
 final class AdminController {
 
-	private const SLUG            = 'security-scanner';
-	private const NONCE_GET_KEY   = 'security_scanner_get_key';
-	private const NONCE_START     = 'security_scanner_start_scan';
-	private const NONCE_POLL      = 'security_scanner_poll';
+	private const SLUG            = 'site-integrity-scanner';
+	private const NONCE_GET_KEY   = 'site_integrity_scanner_get_key';
+	private const NONCE_START     = 'site_integrity_scanner_start_scan';
+	private const NONCE_POLL      = 'site_integrity_scanner_poll';
 	private const CAPABILITY      = 'manage_options';
-	private const OPTION_SETTINGS = 'security_scanner_scan_settings';
+	private const OPTION_SETTINGS = 'site_integrity_scanner_scan_settings';
 
 	/**
 	 * Directory slugs checked by default (before anything is saved).
@@ -67,12 +67,12 @@ final class AdminController {
 		add_action( 'admin_init', array( $this, 'handle_post' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue' ) );
 
-		add_action( 'wp_ajax_security_scanner_status', array( $this, 'ajax_status' ) );
-		add_action( 'wp_ajax_security_scanner_stop', array( $this, 'ajax_stop' ) );
-		add_action( 'wp_ajax_security_scanner_results', array( $this, 'ajax_results' ) );
-		add_action( 'wp_ajax_security_scanner_preview', array( $this, 'ajax_preview' ) );
-		add_action( 'wp_ajax_security_scanner_dirchildren', array( $this, 'ajax_dirchildren' ) );
-		add_action( 'wp_ajax_security_scanner_history', array( $this, 'ajax_history' ) );
+		add_action( 'wp_ajax_site_integrity_scanner_status', array( $this, 'ajax_status' ) );
+		add_action( 'wp_ajax_site_integrity_scanner_stop', array( $this, 'ajax_stop' ) );
+		add_action( 'wp_ajax_site_integrity_scanner_results', array( $this, 'ajax_results' ) );
+		add_action( 'wp_ajax_site_integrity_scanner_preview', array( $this, 'ajax_preview' ) );
+		add_action( 'wp_ajax_site_integrity_scanner_dirchildren', array( $this, 'ajax_dirchildren' ) );
+		add_action( 'wp_ajax_site_integrity_scanner_history', array( $this, 'ajax_history' ) );
 	}
 
 	/**
@@ -80,8 +80,8 @@ final class AdminController {
 	 */
 	public function add_menu(): void {
 		add_menu_page(
-			__( 'Site Integrity Scanner', 'security-scanner' ),
-			__( 'Site Integrity', 'security-scanner' ),
+			__( 'Site Integrity Scanner', 'site-integrity-scanner' ),
+			__( 'Site Integrity', 'site-integrity-scanner' ),
 			self::CAPABILITY,
 			self::SLUG,
 			array( $this, 'render' ),
@@ -101,9 +101,9 @@ final class AdminController {
 		}
 
 		// Pre-built Tailwind stylesheet: utilities are scoped under
-		// #security-scanner-app and preflight is disabled so the WP admin
+		// #site-integrity-scanner-app and preflight is disabled so the WP admin
 		// chrome is never affected. Rebuild with:
-		// node node_modules/tailwindcss/lib/cli.js -i tailwind-src.css -o wp-content/plugins/security-scanner/assets/css/tailwind.build.css --minify
+		// node node_modules/tailwindcss/lib/cli.js -i tailwind-src.css -o wp-content/plugins/site-integrity-scanner/assets/css/tailwind.build.css --minify
 		// admin.js is an esbuild bundle of the ES modules in assets/js/src/.
 		// Rebuild with: npm run build:js (from the dev workspace root).
 		// Asset versions use filemtime so every code change busts the browser
@@ -116,14 +116,14 @@ final class AdminController {
 		$js_ver   = file_exists( $js_path ) ? (string) filemtime( $js_path ) : LLAR_SECURITY_SCANNER_VERSION;
 
 		wp_enqueue_style(
-			'security-scanner-admin',
+			'site-integrity-scanner-admin',
 			LLAR_SECURITY_SCANNER_URL . 'assets/css/tailwind.build.css',
 			array(),
 			$css_ver
 		);
 
 		wp_enqueue_script(
-			'security-scanner-admin',
+			'site-integrity-scanner-admin',
 			LLAR_SECURITY_SCANNER_URL . 'assets/js/admin.js',
 			array(),
 			$js_ver,
@@ -131,48 +131,48 @@ final class AdminController {
 		);
 
 		wp_localize_script(
-			'security-scanner-admin',
+			'site-integrity-scanner-admin',
 			'llarSecurityScanner',
 			array(
 				'ajaxUrl' => admin_url( 'admin-ajax.php' ),
 				'nonce'   => wp_create_nonce( self::NONCE_POLL ),
 				'i18n'    => array(
-					'error'          => __( 'Scan failed. Please try again.', 'security-scanner' ),
-					'saveKey'        => __( 'Save key', 'security-scanner' ),
-					'register'       => __( 'Register', 'security-scanner' ),
-					'showKey'        => __( 'Show site key', 'security-scanner' ),
-					'hideKey'        => __( 'Hide site key', 'security-scanner' ),
-					'stopped'        => __( 'Scan stopped.', 'security-scanner' ),
-					'stopping'       => __( 'Stopping…', 'security-scanner' ),
-					'file'           => __( 'file', 'security-scanner' ),
-					'files'          => __( 'files', 'security-scanner' ),
-					'scanCompleted'  => __( 'Scan completed: {scanned} files scanned, {suspicious} suspicious.', 'security-scanner' ),
-					'scanFailed'     => __( 'Scan failed.', 'security-scanner' ),
-					'historyLoading' => __( 'Loading…', 'security-scanner' ),
-					'historyClean'   => __( 'No problem files in this scan.', 'security-scanner' ),
+					'error'          => __( 'Scan failed. Please try again.', 'site-integrity-scanner' ),
+					'saveKey'        => __( 'Save key', 'site-integrity-scanner' ),
+					'register'       => __( 'Register', 'site-integrity-scanner' ),
+					'showKey'        => __( 'Show site key', 'site-integrity-scanner' ),
+					'hideKey'        => __( 'Hide site key', 'site-integrity-scanner' ),
+					'stopped'        => __( 'Scan stopped.', 'site-integrity-scanner' ),
+					'stopping'       => __( 'Stopping…', 'site-integrity-scanner' ),
+					'file'           => __( 'file', 'site-integrity-scanner' ),
+					'files'          => __( 'files', 'site-integrity-scanner' ),
+					'scanCompleted'  => __( 'Scan completed: {scanned} files scanned, {suspicious} suspicious.', 'site-integrity-scanner' ),
+					'scanFailed'     => __( 'Scan failed.', 'site-integrity-scanner' ),
+					'historyLoading' => __( 'Loading…', 'site-integrity-scanner' ),
+					'historyClean'   => __( 'No problem files in this scan.', 'site-integrity-scanner' ),
 					'statusLabels'   => array(
-						'infected'   => __( 'infected', 'security-scanner' ),
-						'suspicious' => __( 'suspicious', 'security-scanner' ),
-						'error'      => __( 'error', 'security-scanner' ),
+						'infected'   => __( 'infected', 'site-integrity-scanner' ),
+						'suspicious' => __( 'suspicious', 'site-integrity-scanner' ),
+						'error'      => __( 'error', 'site-integrity-scanner' ),
 					),
 					'statusHints'    => array(
-						'infected'   => __( 'Malicious code detected. Back up your site, then replace this file with a clean copy from the original source and check other recently modified files.', 'security-scanner' ),
-						'suspicious' => __( 'Potentially dangerous code detected. Review the file content before deleting anything — obfuscated code can be a false positive.', 'security-scanner' ),
-						'error'      => __( 'The file could not be scanned. Check the server logs and scan again, or review the file manually.', 'security-scanner' ),
+						'infected'   => __( 'Malicious code detected. Back up your site, then replace this file with a clean copy from the original source and check other recently modified files.', 'site-integrity-scanner' ),
+						'suspicious' => __( 'Potentially dangerous code detected. Review the file content before deleting anything — obfuscated code can be a false positive.', 'site-integrity-scanner' ),
+						'error'      => __( 'The file could not be scanned. Check the server logs and scan again, or review the file manually.', 'site-integrity-scanner' ),
 					),
 					'severity'       => array(
-						'critical' => __( 'critical', 'security-scanner' ),
-						'high'     => __( 'high', 'security-scanner' ),
-						'medium'   => __( 'medium', 'security-scanner' ),
-						'low'      => __( 'low', 'security-scanner' ),
-						'info'     => __( 'info', 'security-scanner' ),
+						'critical' => __( 'critical', 'site-integrity-scanner' ),
+						'high'     => __( 'high', 'site-integrity-scanner' ),
+						'medium'   => __( 'medium', 'site-integrity-scanner' ),
+						'low'      => __( 'low', 'site-integrity-scanner' ),
+						'info'     => __( 'info', 'site-integrity-scanner' ),
 					),
 					'severityHints'  => array(
-						'critical' => __( 'Critical: the file almost certainly contains malware. Replace it with a clean copy immediately.', 'security-scanner' ),
-						'high'     => __( 'High: likely malware. Replace the file with a clean copy from a trusted source.', 'security-scanner' ),
-						'medium'   => __( 'Medium: suspicious code constructs found. Review the file and clean it up if needed.', 'security-scanner' ),
-						'low'      => __( 'Low: minor concerns only. Review the file when convenient.', 'security-scanner' ),
-						'info'     => __( 'Informational finding. No action needed unless it keeps reappearing.', 'security-scanner' ),
+						'critical' => __( 'Critical: the file almost certainly contains malware. Replace it with a clean copy immediately.', 'site-integrity-scanner' ),
+						'high'     => __( 'High: likely malware. Replace the file with a clean copy from a trusted source.', 'site-integrity-scanner' ),
+						'medium'   => __( 'Medium: suspicious code constructs found. Review the file and clean it up if needed.', 'site-integrity-scanner' ),
+						'low'      => __( 'Low: minor concerns only. Review the file when convenient.', 'site-integrity-scanner' ),
+						'info'     => __( 'Informational finding. No action needed unless it keeps reappearing.', 'site-integrity-scanner' ),
 					),
 				),
 			)
@@ -185,8 +185,8 @@ final class AdminController {
 	public function handle_post(): void {
 		$action = '';
 		// phpcs:disable WordPress.Security.NonceVerification.Missing -- nonce verified inside each handler.
-		if ( isset( $_POST['security_scanner_action'] ) ) {
-			$action = sanitize_text_field( wp_unslash( $_POST['security_scanner_action'] ) );
+		if ( isset( $_POST['site_integrity_scanner_action'] ) ) {
+			$action = sanitize_text_field( wp_unslash( $_POST['site_integrity_scanner_action'] ) );
 		}
 		// phpcs:enable WordPress.Security.NonceVerification.Missing
 
@@ -195,7 +195,7 @@ final class AdminController {
 		}
 
 		if ( ! current_user_can( self::CAPABILITY ) ) {
-			wp_die( esc_html__( 'Insufficient permissions.', 'security-scanner' ) );
+			wp_die( esc_html__( 'Insufficient permissions.', 'site-integrity-scanner' ) );
 		}
 
 		switch ( $action ) {
@@ -214,7 +214,7 @@ final class AdminController {
 	private function handle_get_key(): void {
 		check_admin_referer( self::NONCE_GET_KEY );
 
-		$manual_key = isset( $_POST['security_scanner_key'] ) ? sanitize_text_field( wp_unslash( $_POST['security_scanner_key'] ) ) : '';
+		$manual_key = isset( $_POST['site_integrity_scanner_key'] ) ? sanitize_text_field( wp_unslash( $_POST['site_integrity_scanner_key'] ) ) : '';
 
 		// When user provides a key manually, store it directly without API call.
 		if ( '' !== $manual_key ) {
@@ -224,27 +224,27 @@ final class AdminController {
 			$this->redirect(
 				array(
 					'type'    => 'success',
-					'message' => __( 'Site key saved.', 'security-scanner' ),
+					'message' => __( 'Site key saved.', 'site-integrity-scanner' ),
 					'scope'   => 'connection',
 				)
 			);
 			return;
 		}
 
-		$terms_accepted = isset( $_POST['security_scanner_terms'] ) && '1' === sanitize_text_field( wp_unslash( $_POST['security_scanner_terms'] ) );
+		$terms_accepted = isset( $_POST['site_integrity_scanner_terms'] ) && '1' === sanitize_text_field( wp_unslash( $_POST['site_integrity_scanner_terms'] ) );
 		if ( ! $terms_accepted ) {
 			$this->redirect(
 				array(
 					'type'    => 'error',
-					'message' => __( 'You must agree to the Terms of Service and Malware Scanning Terms before registering.', 'security-scanner' ),
+					'message' => __( 'You must agree to the Terms of Service and Malware Scanning Terms before registering.', 'site-integrity-scanner' ),
 					'scope'   => 'connection',
 				)
 			);
 			return;
 		}
 
-		$domain = (string) apply_filters( 'security_scanner_site_domain', '' );
-		$email  = isset( $_POST['security_scanner_email'] ) ? sanitize_email( wp_unslash( $_POST['security_scanner_email'] ) ) : '';
+		$domain = (string) apply_filters( 'site_integrity_scanner_site_domain', '' );
+		$email  = isset( $_POST['site_integrity_scanner_email'] ) ? sanitize_email( wp_unslash( $_POST['site_integrity_scanner_email'] ) ) : '';
 
 		$notice          = $this->licensing->register( (string) $domain, $email );
 		$notice['scope'] = 'connection';
@@ -259,17 +259,17 @@ final class AdminController {
 
 		$allowed = $this->directory_options();
 
-		$dir_slugs     = $this->sanitize_directory_slugs( $_POST['security_scanner_directories'] ?? array(), $allowed ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized, WordPress.Security.ValidatedSanitizedInput.MissingUnslash -- sanitised inside sanitize_directory_slugs().
-		$include_masks = $this->parse_masks( $_POST['security_scanner_include'] ?? '' ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized, WordPress.Security.ValidatedSanitizedInput.MissingUnslash -- sanitised inside parse_masks().
-		$exclude_masks = $this->parse_masks( $_POST['security_scanner_exclude'] ?? '' ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized, WordPress.Security.ValidatedSanitizedInput.MissingUnslash -- sanitised inside parse_masks().
+		$dir_slugs     = $this->sanitize_directory_slugs( $_POST['site_integrity_scanner_directories'] ?? array(), $allowed ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized, WordPress.Security.ValidatedSanitizedInput.MissingUnslash -- sanitised inside sanitize_directory_slugs().
+		$include_masks = $this->parse_masks( $_POST['site_integrity_scanner_include'] ?? '' ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized, WordPress.Security.ValidatedSanitizedInput.MissingUnslash -- sanitised inside parse_masks().
+		$exclude_masks = $this->parse_masks( $_POST['site_integrity_scanner_exclude'] ?? '' ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized, WordPress.Security.ValidatedSanitizedInput.MissingUnslash -- sanitised inside parse_masks().
 		$tree_flags    = $this->tree_flags_from_post();
 
 		// Persist the user's selections so the form keeps its state across reloads
 		// (even when the scan fails, e.g. quota exceeded — the user can retry).
 		$this->store_scan_settings(
 			$dir_slugs,
-			isset( $_POST['security_scanner_include'] ) ? sanitize_text_field( wp_unslash( $_POST['security_scanner_include'] ) ) : '', // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.MissingUnslash -- unslashed above.
-			isset( $_POST['security_scanner_exclude'] ) ? sanitize_text_field( wp_unslash( $_POST['security_scanner_exclude'] ) ) : '', // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.MissingUnslash -- unslashed above.
+			isset( $_POST['site_integrity_scanner_include'] ) ? sanitize_text_field( wp_unslash( $_POST['site_integrity_scanner_include'] ) ) : '', // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.MissingUnslash -- unslashed above.
+			isset( $_POST['site_integrity_scanner_exclude'] ) ? sanitize_text_field( wp_unslash( $_POST['site_integrity_scanner_exclude'] ) ) : '', // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.MissingUnslash -- unslashed above.
 			$tree_flags
 		);
 
@@ -285,7 +285,7 @@ final class AdminController {
 				$this->redirect(
 					array(
 						'type'    => 'error',
-						'message' => __( 'Select at least one directory to scan.', 'security-scanner' ),
+						'message' => __( 'Select at least one directory to scan.', 'site-integrity-scanner' ),
 						'scope'   => 'scan',
 					)
 				);
@@ -309,8 +309,8 @@ final class AdminController {
 			$is_key_error = 401 === $e->getCode();
 			$real_message = $e->getMessage();
 			$message      = $is_key_error
-				? __( 'The site key is missing or was rejected. Use the Connection form above to obtain a new key, then start the scan again.', 'security-scanner' )
-				: ( '' !== $real_message ? $real_message : __( 'Could not start the scan. Please try again in a moment.', 'security-scanner' ) );
+				? __( 'The site key is missing or was rejected. Use the Connection form above to obtain a new key, then start the scan again.', 'site-integrity-scanner' )
+				: ( '' !== $real_message ? $real_message : __( 'Could not start the scan. Please try again in a moment.', 'site-integrity-scanner' ) );
 
 			$this->redirect(
 				array(
@@ -322,17 +322,17 @@ final class AdminController {
 			return;
 		}
 
-		set_transient( 'security_scanner_active_job', $job_id, HOUR_IN_SECONDS );
+		set_transient( 'site_integrity_scanner_active_job', $job_id, HOUR_IN_SECONDS );
 		// One-shot marker consumed by render() on the FIRST page load after the
 		// PRG redirect. It is NOT a persistent "scan in progress" flag: once
 		// consumed, a page reload no longer surfaces a running scan, so the UI
 		// returns to idle and the scan is not silently resumed by the poller.
-		set_transient( 'security_scanner_started_job', $job_id, 5 * MINUTE_IN_SECONDS );
+		set_transient( 'site_integrity_scanner_started_job', $job_id, 5 * MINUTE_IN_SECONDS );
 
 		$this->redirect(
 			array(
 				'type'    => 'success',
-				'message' => __( 'Scan started. Do not close this page until it completes.', 'security-scanner' ),
+				'message' => __( 'Scan started. Do not close this page until it completes.', 'site-integrity-scanner' ),
 				'scope'   => 'scan',
 			)
 		);
@@ -351,8 +351,8 @@ final class AdminController {
 		$job_id = '';
 		if ( isset( $_POST['job_id'] ) ) {
 			$job_id = sanitize_text_field( wp_unslash( $_POST['job_id'] ) );
-		} elseif ( get_transient( 'security_scanner_active_job' ) ) {
-			$job_id = (string) get_transient( 'security_scanner_active_job' );
+		} elseif ( get_transient( 'site_integrity_scanner_active_job' ) ) {
+			$job_id = (string) get_transient( 'site_integrity_scanner_active_job' );
 		}
 
 		if ( '' === $job_id ) {
@@ -366,7 +366,7 @@ final class AdminController {
 		}
 
 		if ( in_array( $status['status'], array( 'completed', 'done', 'failed' ), true ) ) {
-			delete_transient( 'security_scanner_active_job' );
+			delete_transient( 'site_integrity_scanner_active_job' );
 
 			// Archive the run once, at the moment completion is first observed.
 			// Failed scans are not archived: an empty "0 problems" row would read
@@ -395,7 +395,7 @@ final class AdminController {
 			wp_send_json_error( array( 'message' => 'forbidden' ), 403 );
 		}
 
-		delete_transient( 'security_scanner_active_job' );
+		delete_transient( 'site_integrity_scanner_active_job' );
 
 		wp_send_json_success( array( 'status' => 'stopped' ) );
 	}
@@ -482,8 +482,8 @@ final class AdminController {
 		$job_id = '';
 		if ( isset( $_POST['job_id'] ) ) {
 			$job_id = sanitize_text_field( wp_unslash( $_POST['job_id'] ) );
-		} elseif ( get_transient( 'security_scanner_active_job' ) ) {
-			$job_id = (string) get_transient( 'security_scanner_active_job' );
+		} elseif ( get_transient( 'site_integrity_scanner_active_job' ) ) {
+			$job_id = (string) get_transient( 'site_integrity_scanner_active_job' );
 		}
 
 		if ( '' === $job_id ) {
@@ -533,8 +533,8 @@ final class AdminController {
 		}
 
 		$allowed = $this->directory_options();
-		$include = $this->parse_masks( $_POST['security_scanner_include'] ?? '' ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized, WordPress.Security.ValidatedSanitizedInput.MissingUnslash -- sanitised inside parse_masks().
-		$exclude = $this->parse_masks( $_POST['security_scanner_exclude'] ?? '' ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized, WordPress.Security.ValidatedSanitizedInput.MissingUnslash -- sanitised inside parse_masks().
+		$include = $this->parse_masks( $_POST['site_integrity_scanner_include'] ?? '' ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized, WordPress.Security.ValidatedSanitizedInput.MissingUnslash -- sanitised inside parse_masks().
+		$exclude = $this->parse_masks( $_POST['site_integrity_scanner_exclude'] ?? '' ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized, WordPress.Security.ValidatedSanitizedInput.MissingUnslash -- sanitised inside parse_masks().
 		$flags   = $this->tree_flags_from_post();
 
 		if ( array() !== $flags ) {
@@ -542,7 +542,7 @@ final class AdminController {
 			$directories = $scope[0];
 			$exclude     = $scope[2];
 		} else {
-			$dir_slugs   = $this->sanitize_directory_slugs( $_POST['security_scanner_directories'] ?? array(), $allowed ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized, WordPress.Security.ValidatedSanitizedInput.MissingUnslash -- sanitised inside sanitize_directory_slugs().
+			$dir_slugs   = $this->sanitize_directory_slugs( $_POST['site_integrity_scanner_directories'] ?? array(), $allowed ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized, WordPress.Security.ValidatedSanitizedInput.MissingUnslash -- sanitised inside sanitize_directory_slugs().
 			$directories = $this->resolve_scan_directories( $dir_slugs, $allowed );
 		}
 
@@ -869,7 +869,7 @@ final class AdminController {
 			'on'  => true,
 			'off' => false,
 		) as $key => $value ) {
-			$raw = isset( $_POST[ 'security_scanner_tree_' . $key ] ) ? $_POST[ 'security_scanner_tree_' . $key ] : array(); // phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized, WordPress.Security.ValidatedSanitizedInput.MissingUnslash -- nonce verified by the caller; value sanitised/validated below.
+			$raw = isset( $_POST[ 'site_integrity_scanner_tree_' . $key ] ) ? $_POST[ 'site_integrity_scanner_tree_' . $key ] : array(); // phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized, WordPress.Security.ValidatedSanitizedInput.MissingUnslash -- nonce verified by the caller; value sanitised/validated below.
 			if ( ! is_array( $raw ) ) {
 				continue;
 			}
@@ -1033,7 +1033,7 @@ final class AdminController {
 		);
 
 		// E2E test: if a test directory was set via transient, add it.
-		$e2e_dir = get_transient( 'security_scanner_e2e_dir' );
+		$e2e_dir = get_transient( 'site_integrity_scanner_e2e_dir' );
 		if ( false !== $e2e_dir && is_string( $e2e_dir ) && '' !== $e2e_dir ) {
 			$options['e2e-test'] = $e2e_dir;
 		}
@@ -1047,7 +1047,7 @@ final class AdminController {
 	 * @param array{type: string, message: string} $notice Notice.
 	 */
 	private function redirect( array $notice ): void {
-		set_transient( 'security_scanner_notice', $notice, 60 );
+		set_transient( 'site_integrity_scanner_notice', $notice, 60 );
 		wp_safe_redirect( admin_url( 'admin.php?page=' . self::SLUG ) );
 		exit;
 	}
@@ -1063,9 +1063,9 @@ final class AdminController {
 	 * @return string Job id, or '' when no scan was just started.
 	 */
 	private function consume_started_job(): string {
-		$job_id = get_transient( 'security_scanner_started_job' );
+		$job_id = get_transient( 'site_integrity_scanner_started_job' );
 		if ( false !== $job_id ) {
-			delete_transient( 'security_scanner_started_job' );
+			delete_transient( 'site_integrity_scanner_started_job' );
 			return (string) $job_id;
 		}
 		return '';
@@ -1084,11 +1084,11 @@ final class AdminController {
 	 * @return array{type: string, message: string, scope: string}|null Notice data or null when none pending.
 	 */
 	private function consume_notice(): ?array {
-		$notice = get_transient( 'security_scanner_notice' );
+		$notice = get_transient( 'site_integrity_scanner_notice' );
 		if ( ! is_array( $notice ) ) {
 			return null;
 		}
-		delete_transient( 'security_scanner_notice' );
+		delete_transient( 'site_integrity_scanner_notice' );
 
 		$allowed = array(
 			'success' => true,

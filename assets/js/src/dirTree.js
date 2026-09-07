@@ -135,7 +135,7 @@ export function initDirTree( onChange ) {
 		Object.keys( treeFlags ).forEach( function ( rel ) {
 			const input = document.createElement( 'input' );
 			input.type = 'hidden';
-			input.name = treeFlags[ rel ] ? 'security_scanner_tree_on[]' : 'security_scanner_tree_off[]';
+			input.name = treeFlags[ rel ] ? 'site_integrity_scanner_tree_on[]' : 'site_integrity_scanner_tree_off[]';
 			input.value = rel;
 			flagsContainer.appendChild( input );
 		} );
@@ -179,7 +179,7 @@ export function initDirTree( onChange ) {
 		input.type = 'checkbox';
 		input.className = 'rounded border-slate-300 text-primary-600 focus:ring-primary-500';
 		if ( child.slug ) {
-			input.name = 'security_scanner_directories[]';
+			input.name = 'site_integrity_scanner_directories[]';
 			input.value = child.slug;
 		}
 		label.appendChild( input );
@@ -238,7 +238,7 @@ export function initDirTree( onChange ) {
 				kids.dataset.loaded = '1';
 				kids.hidden = false;
 
-				fetchJSON( 'security_scanner_dirchildren', { rel: rel } ).then( function ( payload ) {
+				fetchJSON( 'site_integrity_scanner_dirchildren', { rel: rel } ).then( function ( payload ) {
 					const children = ( payload && payload.data && payload.data.children ) || [];
 					children.forEach( function ( child ) {
 						// Skip folders already present: the preview/results renderer
@@ -284,7 +284,7 @@ export function initDirTree( onChange ) {
 		/** @return {string[]} Checked legacy slug checkboxes (no-JS fallback values). */
 			getSelectedSlugs: function () {
 				return Array.prototype.slice
-					.call( dirTreeEl.querySelectorAll( 'input[name="security_scanner_directories[]"]' ) )
+					.call( dirTreeEl.querySelectorAll( 'input[name="site_integrity_scanner_directories[]"]' ) )
 					.filter( function ( cb ) {
 						return cb.checked;
 					} )

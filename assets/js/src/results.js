@@ -22,7 +22,7 @@ const onlySuspicious = document.getElementById( 'llar-only-suspicious' );
  * @return {Promise<Array<{file_path: string, status: string}>>}
  */
 export function loadResults( jobId ) {
-	return fetchJSON( 'security_scanner_results', { job_id: jobId } )
+	return fetchJSON( 'site_integrity_scanner_results', { job_id: jobId } )
 		.then( function ( payload ) {
 			const rows = ( payload && payload.data && payload.data.results ) || [];
 			attachResults( rows );

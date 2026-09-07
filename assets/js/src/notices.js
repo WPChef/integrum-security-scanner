@@ -9,7 +9,7 @@
 import { scrollIntoView } from './viewport.js';
 
 export function initNotices() {
-	const notice = document.querySelector( '.security-scanner-notice' );
+	const notice = document.querySelector( '.site-integrity-scanner-notice' );
 	if ( ! notice ) {
 		return;
 	}

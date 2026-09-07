@@ -22,7 +22,7 @@ final class WpTransientJobStore implements JobStoreInterface {
 	/**
 	 * Transient name prefix shared by every per-job key.
 	 */
-	private const PREFIX = 'security_scanner_';
+	private const PREFIX = 'site_integrity_scanner_';
 
 	/**
 	 * Transient lifetime (1 hour) — long enough for a scan to finish, short
