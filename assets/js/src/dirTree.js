@@ -215,6 +215,13 @@ export function initDirTree( onChange ) {
 				}
 			} );
 			input.addEventListener( 'change', function () {
+				// Revert checked → unchecked while locked: preventDefault on click
+				// is not reliable for every input path (e.g. label / programmatic).
+				if ( dirTreeLocked && ! input.checked ) {
+					syncRow( row );
+					syncHidden();
+					return;
+				}
 				onRowToggle( rel, input.checked );
 			} );
 		}

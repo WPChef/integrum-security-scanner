@@ -1,4 +1,4 @@
-=== File Security Scanner ===
+=== Site Integrity Scanner ===
 Contributors: wpchefgadget, nikitaglobal
 Tags: security, malware, scanner, antivirus, files
 Requires at least: 6.0
@@ -12,7 +12,7 @@ Scan your WordPress files for malicious code. Pick the folders, start a scan, an
 
 == Description ==
 
-**File Security Scanner** checks your site's files for malware and suspicious code, directly from the WordPress dashboard.
+**Site Integrity Scanner** checks your site's files for malware and suspicious code, directly from the WordPress dashboard.
 
 Choose exactly what to scan with a folder tree and include/exclude masks, start the scan, and watch the live progress. When it finishes, suspicious files are listed per folder with a severity label so you know where to look first.
 
@@ -32,7 +32,7 @@ Brought to you by the team behind **Limit Login Attempts Reloaded**.
 
 1. Upload the plugin folder to the `/wp-content/plugins/` directory, or install it through the **Plugins → Add New** screen in WordPress.
 2. Activate the plugin through the **Plugins** menu.
-3. Open **File Security** in the admin menu, register to get a site key, then start your first scan.
+3. Open **Site Integrity** in the admin menu, register to get a site key, then start your first scan.
 
 == Frequently Asked Questions ==
 

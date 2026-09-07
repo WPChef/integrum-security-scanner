@@ -1,6 +1,6 @@
 <?php
 /**
- * Plugin Name:       File Security Scanner
+ * Plugin Name:       Site Integrity Scanner
  * Plugin URI:        https://www.limitloginattempts.com/
  * Description:       Scan your WordPress files for malicious code, right from the dashboard.
  * Version:           0.1.0

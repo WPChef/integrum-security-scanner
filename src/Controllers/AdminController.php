@@ -80,8 +80,8 @@ final class AdminController {
 	 */
 	public function add_menu(): void {
 		add_menu_page(
-			__( 'File Security Scanner', 'security-scanner' ),
-			__( 'File Security', 'security-scanner' ),
+			__( 'Site Integrity Scanner', 'security-scanner' ),
+			__( 'Site Integrity', 'security-scanner' ),
 			self::CAPABILITY,
 			self::SLUG,
 			array( $this, 'render' ),
