@@ -9,25 +9,25 @@
  *   4. For action=needs_upload  -> POST /jobs/{id}/upload (multipart) per file.
  *   5. When is_complete -> verdicts are read from the same /results payload.
  *
- * @package Llar\SecurityScanner\Models
+ * @package Integrum\SecurityScanner\Models
  */
 
 declare( strict_types = 1 );
 
-namespace Llar\SecurityScanner\Models;
+namespace Integrum\SecurityScanner\Models;
 
-use Llar\SecurityScanner\Contracts\CredentialStorageInterface;
-use Llar\SecurityScanner\Contracts\FileCollectorInterface;
-use Llar\SecurityScanner\Contracts\HttpClientInterface;
-use Llar\SecurityScanner\Contracts\HttpException;
-use Llar\SecurityScanner\Contracts\JobStoreInterface;
-use Llar\SecurityScanner\Contracts\LoggerInterface;
-use Llar\SecurityScanner\Contracts\ScanException;
+use Integrum\SecurityScanner\Contracts\CredentialStorageInterface;
+use Integrum\SecurityScanner\Contracts\FileCollectorInterface;
+use Integrum\SecurityScanner\Contracts\HttpClientInterface;
+use Integrum\SecurityScanner\Contracts\HttpException;
+use Integrum\SecurityScanner\Contracts\JobStoreInterface;
+use Integrum\SecurityScanner\Contracts\LoggerInterface;
+use Integrum\SecurityScanner\Contracts\ScanException;
 
 /**
  * Talks directly to Imunify Connect using a job model: start -> poll -> results.
  */
-final class ImunifyScanner implements \Llar\SecurityScanner\Contracts\ScannerInterface {
+final class ImunifyScanner implements \Integrum\SecurityScanner\Contracts\ScannerInterface {
 
 	/**
 	 * Files larger than this are skipped to keep uploads bounded.
@@ -127,7 +127,7 @@ final class ImunifyScanner implements \Llar\SecurityScanner\Contracts\ScannerInt
 		private string $domain,
 		?string $base = null
 	) {
-		$this->base = $base ?? ( defined( 'LLAR_SECURITY_SCANNER_SCANNER_API_BASE' ) ? LLAR_SECURITY_SCANNER_SCANNER_API_BASE : 'https://connect.imunify.com' );
+		$this->base = $base ?? ( defined( 'INTEGRUM_SECURITY_SCANNER_SCANNER_API_BASE' ) ? INTEGRUM_SECURITY_SCANNER_SCANNER_API_BASE : 'https://connect.imunify.com' );
 	}
 
 	/**
@@ -166,7 +166,7 @@ final class ImunifyScanner implements \Llar\SecurityScanner\Contracts\ScannerInt
 		$resp = $this->call( 'POST', '/scan/start', $key, array( 'files' => $manifest ) );
 
 		if ( empty( $resp['body']['job_id'] ) ) {
-			throw new ScanException( __( 'No job_id returned by scanner.', 'site-integrity-scanner' ) );
+			throw new ScanException( __( 'No job_id returned by scanner.', 'integrum-security-scanner' ) );
 		}
 
 		$job_id = (string) $resp['body']['job_id'];
@@ -501,14 +501,14 @@ final class ImunifyScanner implements \Llar\SecurityScanner\Contracts\ScannerInt
 		try {
 			$resp = $this->http->upload( $url, $abs, $file_id, $key );
 		} catch ( HttpException $e ) {
-			throw new ScanException( __( 'Upload failed.', 'site-integrity-scanner' ), 0, $e );
+			throw new ScanException( __( 'Upload failed.', 'integrum-security-scanner' ), 0, $e );
 		}
 
 		if ( $resp['code'] < 200 || $resp['code'] >= 300 ) {
 			throw new ScanException(
 				sprintf(
 					/* translators: %d: HTTP status code returned by the scanner API. */
-					__( 'Upload rejected: HTTP %d.', 'site-integrity-scanner' ),
+					__( 'Upload rejected: HTTP %d.', 'integrum-security-scanner' ),
 					(int) $resp['code']
 				)
 			);
@@ -537,7 +537,7 @@ final class ImunifyScanner implements \Llar\SecurityScanner\Contracts\ScannerInt
 			try {
 				$resp = $this->http->request( $method, $url, $body, $key );
 			} catch ( HttpException $e2 ) {
-				throw new ScanException( __( 'Scanner is temporarily unavailable.', 'site-integrity-scanner' ), 0, $e2 );
+				throw new ScanException( __( 'Scanner is temporarily unavailable.', 'integrum-security-scanner' ), 0, $e2 );
 			}
 		}
 
@@ -552,7 +552,7 @@ final class ImunifyScanner implements \Llar\SecurityScanner\Contracts\ScannerInt
 			try {
 				$resp = $this->http->request( $method, $url, $body, $key );
 			} catch ( HttpException $e ) {
-				throw new ScanException( __( 'Scanner returned server error.', 'site-integrity-scanner' ), 0, $e );
+				throw new ScanException( __( 'Scanner returned server error.', 'integrum-security-scanner' ), 0, $e );
 			}
 		}
 
@@ -564,7 +564,7 @@ final class ImunifyScanner implements \Llar\SecurityScanner\Contracts\ScannerInt
 			throw new ScanException(
 				sprintf(
 					/* translators: %d: HTTP status code returned by the scanner API. */
-					__( 'Scanner error: HTTP %d.', 'site-integrity-scanner' ),
+					__( 'Scanner error: HTTP %d.', 'integrum-security-scanner' ),
 					(int) $resp['code']
 				)
 			);
@@ -593,14 +593,14 @@ final class ImunifyScanner implements \Llar\SecurityScanner\Contracts\ScannerInt
 
 		// Quota / rate-limit: the key is valid, the limit was hit.
 		if ( 403 === $http_code && 'quota_exceeded' === $api_code ) {
-			$msg    = '' !== $message ? $message : __( 'Scan quota exceeded.', 'site-integrity-scanner' );
+			$msg    = '' !== $message ? $message : __( 'Scan quota exceeded.', 'integrum-security-scanner' );
 			$quota  = is_array( $body['quota'] ?? null ) ? $body['quota'] : array();
 			$resets = (int) ( $quota['resets_in'] ?? 0 );
 			if ( $resets > 0 ) {
 				$days = max( 1, (int) round( $resets / 86400 ) );
 				$msg .= ' ' . sprintf(
 					/* translators: %d: number of days until the scan quota resets. */
-					_n( 'Resets in %d day.', 'Resets in %d days.', $days, 'site-integrity-scanner' ),
+					_n( 'Resets in %d day.', 'Resets in %d days.', $days, 'integrum-security-scanner' ),
 					$days
 				);
 			}
@@ -609,8 +609,8 @@ final class ImunifyScanner implements \Llar\SecurityScanner\Contracts\ScannerInt
 
 		if ( '' === $message ) {
 			$message = 401 === $http_code
-				? __( 'Invalid site key.', 'site-integrity-scanner' )
-				: __( 'Scanner rejected the request.', 'site-integrity-scanner' );
+				? __( 'Invalid site key.', 'integrum-security-scanner' )
+				: __( 'Scanner rejected the request.', 'integrum-security-scanner' );
 		}
 
 		return new ScanException( $message, 401 === $http_code ? 401 : 403 );

@@ -47,9 +47,9 @@ function computeEta( window, scanned, total ) {
  * land in the viewport, not below the fold.
  */
 export function initPolling( jobId ) {
-	const statusSection = document.querySelector( '.llar-status' );
-	const stopBtn = document.querySelector( '.llar-scan-actions__stop' );
-	const startBtn = document.querySelector( '.llar-scan-actions__start' );
+	const statusSection = document.querySelector( '.iss-status' );
+	const stopBtn = document.querySelector( '.iss-scan-actions__stop' );
+	const startBtn = document.querySelector( '.iss-scan-actions__start' );
 	if ( ! statusSection ) {
 		return;
 	}
@@ -57,8 +57,8 @@ export function initPolling( jobId ) {
 	revealIntoView( statusSection );
 	setDirTreeLocked( true );
 
-	const progressBar = statusSection.querySelector( '.llar-progress__bar' );
-	const progressLabel = statusSection.querySelector( '.llar-progress__label' );
+	const progressBar = statusSection.querySelector( '.iss-progress__bar' );
+	const progressLabel = statusSection.querySelector( '.iss-progress__label' );
 
 	// Rolling samples of {t: client ms, bytes: scannedBytes} for ETA smoothing.
 	// We derive the scan rate from the last few polls instead of the whole
@@ -66,7 +66,7 @@ export function initPolling( jobId ) {
 	let samples = [];
 
 	function pollStatus() {
-		fetchJSON( 'site_integrity_scanner_status', { job_id: jobId } )
+		fetchJSON( 'integrum_security_scanner_status', { job_id: jobId } )
 			.then( onStatus )
 			.catch( function () {
 				progressLabel.textContent = CFG.i18n ? CFG.i18n.error : 'error';
@@ -163,7 +163,7 @@ export function initPolling( jobId ) {
 			return;
 		}
 		Array.prototype.forEach.call(
-			section.querySelectorAll( '.site-integrity-scanner-notice' ),
+			section.querySelectorAll( '.integrum-security-scanner-notice' ),
 			function ( notice ) {
 				notice.hidden = true;
 			}
@@ -181,7 +181,7 @@ export function initPolling( jobId ) {
 	 */
 	function showSummary( statusSection, status, rows ) {
 		const summary = statusSection.parentElement
-			? statusSection.parentElement.querySelector( '.llar-scan-summary' )
+			? statusSection.parentElement.querySelector( '.iss-scan-summary' )
 			: null;
 		if ( ! summary ) {
 			return;
@@ -192,7 +192,7 @@ export function initPolling( jobId ) {
 		let skin;
 		if ( 'failed' === status ) {
 			text = i18n.scanFailed || 'Scan failed.';
-			skin = 'llar-scan-summary--failed';
+			skin = 'iss-scan-summary--failed';
 		} else {
 			const suspicious = rows.filter( function ( row ) {
 				return row.status && 'clean' !== row.status;
@@ -200,11 +200,11 @@ export function initPolling( jobId ) {
 			text = ( i18n.scanCompleted || 'Scan completed: {scanned} files scanned, {suspicious} suspicious.' )
 				.replace( '{scanned}', String( rows.length ) )
 				.replace( '{suspicious}', String( suspicious ) );
-			skin = suspicious > 0 ? 'llar-scan-summary--findings' : 'llar-scan-summary--clean';
+			skin = suspicious > 0 ? 'iss-scan-summary--findings' : 'iss-scan-summary--clean';
 		}
 
 		summary.textContent = text;
-		summary.className = 'llar-scan-summary mb-4 rounded-lg border px-4 py-3 text-sm ' + skin;
+		summary.className = 'iss-scan-summary mb-4 rounded-lg border px-4 py-3 text-sm ' + skin;
 		summary.hidden = false;
 	}
 

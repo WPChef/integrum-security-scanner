@@ -6,15 +6,15 @@
  * `wp-content/debug.log`; otherwise it lands in the server PHP error log.
  * No custom file is created.
  *
- * @package Llar\SecurityScanner\Models
+ * @package Integrum\SecurityScanner\Models
  */
 
 declare( strict_types = 1 );
 
-namespace Llar\SecurityScanner\Models;
+namespace Integrum\SecurityScanner\Models;
 
-use Llar\SecurityScanner\Contracts\CredentialStorageInterface;
-use Llar\SecurityScanner\Contracts\LoggerInterface;
+use Integrum\SecurityScanner\Contracts\CredentialStorageInterface;
+use Integrum\SecurityScanner\Contracts\LoggerInterface;
 
 /**
  * Thin adapter over error_log() with credential redaction.

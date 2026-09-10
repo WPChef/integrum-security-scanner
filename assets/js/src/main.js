@@ -27,7 +27,7 @@ notifyPreview = previewApi.schedule;
 
 initResultsFilter();
 
-const jobIdInput = document.querySelector( '.llar-job-id' );
+const jobIdInput = document.querySelector( '.iss-job-id' );
 if ( jobIdInput && jobIdInput.value ) {
 	// A scan was just started (one-shot transient): poll it and keep the
 	// progress bar in the visible area.

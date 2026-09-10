@@ -9,14 +9,14 @@
 import { scrollIntoView } from './viewport.js';
 
 export function initNotices() {
-	const notice = document.querySelector( '.site-integrity-scanner-notice' );
+	const notice = document.querySelector( '.integrum-security-scanner-notice' );
 	if ( ! notice ) {
 		return;
 	}
 
 	// Do not fight the progress reveal: if a scan was just started, its
 	// section is the thing the user needs to see.
-	const jobIdInput = document.querySelector( '.llar-job-id' );
+	const jobIdInput = document.querySelector( '.iss-job-id' );
 	if ( jobIdInput && jobIdInput.value ) {
 		return;
 	}

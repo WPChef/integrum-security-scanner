@@ -2,14 +2,14 @@
 /**
  * Scanner contract.
  *
- * @package Llar\SecurityScanner\Contracts
+ * @package Integrum\SecurityScanner\Contracts
  */
 
 declare( strict_types = 1 );
 
-namespace Llar\SecurityScanner\Contracts;
+namespace Integrum\SecurityScanner\Contracts;
 
-use Llar\SecurityScanner\Models\ScanResult;
+use Integrum\SecurityScanner\Models\ScanResult;
 
 interface ScannerInterface {
 

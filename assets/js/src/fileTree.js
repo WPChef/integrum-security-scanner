@@ -17,11 +17,11 @@ import { CFG } from './config.js';
  */
 export function renderFile( row ) {
 	const li = document.createElement( 'li' );
-	li.className = 'llar-tree__file' + fileStatusClass( row );
+	li.className = 'iss-tree__file' + fileStatusClass( row );
 
 	const name = row.file_path.split( '/' ).pop();
 	const nameEl = document.createElement( 'span' );
-	nameEl.className = 'llar-tree__file-name';
+	nameEl.className = 'iss-tree__file-name';
 	nameEl.textContent = name;
 	nameEl.title = row.file_path;
 	li.appendChild( nameEl );
@@ -30,10 +30,10 @@ export function renderFile( row ) {
 
 	// Status chip (infected/suspicious/error) with an explanatory tooltip —
 	// the label alone does not tell the user what to do with the file.
-	// (Class intentionally differs from the .llar-status progress block.)
+	// (Class intentionally differs from the .iss-status progress block.)
 	if ( row.status && 'clean' !== row.status && 'pending' !== row.status ) {
 		const st = document.createElement( 'span' );
-		st.className = 'llar-verdict llar-verdict--' + row.status + ' llar-tip';
+		st.className = 'iss-verdict iss-verdict--' + row.status + ' iss-tip';
 		st.textContent = ( i18n.statusLabels && i18n.statusLabels[ row.status ] ) || row.status;
 		st.tabIndex = 0;
 		const stHint = ( i18n.statusHints && i18n.statusHints[ row.status ] ) || '';
@@ -45,7 +45,7 @@ export function renderFile( row ) {
 
 	if ( row.severity ) {
 		const sev = document.createElement( 'span' );
-		sev.className = 'llar-sev llar-sev--' + row.severity + ' llar-tip';
+		sev.className = 'iss-sev iss-sev--' + row.severity + ' iss-tip';
 		sev.textContent = ( i18n.severity && i18n.severity[ row.severity ] ) || row.severity;
 		sev.tabIndex = 0;
 		const sevHint = ( i18n.severityHints && i18n.severityHints[ row.severity ] ) || '';
@@ -57,7 +57,7 @@ export function renderFile( row ) {
 
 	if ( row.threat_type ) {
 		const t = document.createElement( 'em' );
-		t.className = 'llar-tree__threat';
+		t.className = 'iss-tree__threat';
 		t.textContent = row.threat_type;
 		li.appendChild( t );
 	}
@@ -87,22 +87,22 @@ export function dirname( path ) {
  */
 function buildDetail( detail ) {
 	const wrap = document.createElement( 'span' );
-	wrap.className = 'llar-file-detail';
+	wrap.className = 'iss-file-detail';
 
 	const btn = document.createElement( 'button' );
 	btn.type = 'button';
-	btn.className = 'llar-file-detail__toggle';
+	btn.className = 'iss-file-detail__toggle';
 	btn.textContent = 'ⓘ';
 	btn.title = 'Imunify response';
 	btn.setAttribute( 'aria-expanded', 'false' );
 	wrap.appendChild( btn );
 
 	const panel = document.createElement( 'span' );
-	panel.className = 'llar-file-detail__panel';
+	panel.className = 'iss-file-detail__panel';
 	panel.hidden = true;
 	Object.keys( detail ).forEach( function ( key ) {
 		const item = document.createElement( 'span' );
-		item.className = 'llar-file-detail__item';
+		item.className = 'iss-file-detail__item';
 		const k = document.createElement( 'em' );
 		k.textContent = key + ':';
 		const v = document.createElement( 'code' );

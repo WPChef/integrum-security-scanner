@@ -2,12 +2,12 @@
 /**
  * Persistent scan history.
  *
- * @package Llar\SecurityScanner\Models
+ * @package Integrum\SecurityScanner\Models
  */
 
 declare( strict_types = 1 );
 
-namespace Llar\SecurityScanner\Models;
+namespace Integrum\SecurityScanner\Models;
 
 /**
  * Keeps the list of finished scan runs in a no-autoload option so the admin
@@ -26,7 +26,7 @@ namespace Llar\SecurityScanner\Models;
  */
 final class ScanHistoryStorage {
 
-	private const OPTION_NAME = 'site_integrity_scanner_history';
+	private const OPTION_NAME = 'integrum_security_scanner_history';
 
 	/** How many runs to keep (newest first, older dropped). */
 	private const MAX_RUNS = 20;

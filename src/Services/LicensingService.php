@@ -6,17 +6,17 @@
  * transport layer. Returns a UI-ready notice; the controller decides how to
  * surface it.
  *
- * @package Llar\SecurityScanner\Services
+ * @package Integrum\SecurityScanner\Services
  */
 
 declare( strict_types = 1 );
 
-namespace Llar\SecurityScanner\Services;
+namespace Integrum\SecurityScanner\Services;
 
-use Llar\SecurityScanner\Contracts\CredentialStorageInterface;
-use Llar\SecurityScanner\Contracts\HttpClientInterface;
-use Llar\SecurityScanner\Contracts\HttpException;
-use Llar\SecurityScanner\Contracts\LoggerInterface;
+use Integrum\SecurityScanner\Contracts\CredentialStorageInterface;
+use Integrum\SecurityScanner\Contracts\HttpClientInterface;
+use Integrum\SecurityScanner\Contracts\HttpException;
+use Integrum\SecurityScanner\Contracts\LoggerInterface;
 
 /**
  * Single responsibility: turn (domain, email) into a stored site key.
@@ -55,7 +55,7 @@ final class LicensingService {
 		if ( '' === $domain || ! is_email( $email ) ) {
 			return array(
 				'type'    => 'error',
-				'message' => __( 'Please provide a valid email address.', 'site-integrity-scanner' ),
+				'message' => __( 'Please provide a valid email address.', 'integrum-security-scanner' ),
 			);
 		}
 
@@ -73,7 +73,7 @@ final class LicensingService {
 
 			return array(
 				'type'    => 'error',
-				'message' => __( 'Could not reach the licensing service. Please try again.', 'site-integrity-scanner' ),
+				'message' => __( 'Could not reach the licensing service. Please try again.', 'integrum-security-scanner' ),
 			);
 		}
 
@@ -89,7 +89,7 @@ final class LicensingService {
 
 			return array(
 				'type'    => 'error',
-				'message' => __( 'Could not obtain a site key. Please try again.', 'site-integrity-scanner' ),
+				'message' => __( 'Could not obtain a site key. Please try again.', 'integrum-security-scanner' ),
 			);
 		}
 
@@ -100,7 +100,7 @@ final class LicensingService {
 			'type'    => 'success',
 			'message' => sprintf(
 				/* translators: %s: plan name. */
-				__( 'Site registered. Plan: %s.', 'site-integrity-scanner' ),
+				__( 'Site registered. Plan: %s.', 'integrum-security-scanner' ),
 				(string) ( $body['plan'] ?? 'free' )
 			),
 		);
@@ -129,11 +129,11 @@ final class LicensingService {
 		}
 
 		if ( '' === $text ) {
-			return __( 'Registration failed. Please try again.', 'site-integrity-scanner' );
+			return __( 'Registration failed. Please try again.', 'integrum-security-scanner' );
 		}
 
 		if ( false !== stripos( $text, 'already' ) ) {
-			return rtrim( $text, ' .' ) . '. ' . __( 'Paste the site key in the field below and save it manually.', 'site-integrity-scanner' );
+			return rtrim( $text, ' .' ) . '. ' . __( 'Paste the site key in the field below and save it manually.', 'integrum-security-scanner' );
 		}
 
 		return $text;

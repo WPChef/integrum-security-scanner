@@ -9,14 +9,14 @@ import { scrollIntoView } from './viewport.js';
 import { setDirTreeLocked } from './dirTree.js';
 
 export function initStopScan() {
-	const stopBtn = document.querySelector( '.llar-scan-actions__stop' );
+	const stopBtn = document.querySelector( '.iss-scan-actions__stop' );
 	if ( ! stopBtn ) {
 		return;
 	}
 
 	stopBtn.addEventListener( 'click', function () {
-		const statusSection = document.querySelector( '.llar-status' );
-		const progressLabel = statusSection && statusSection.querySelector( '.llar-progress__label' );
+		const statusSection = document.querySelector( '.iss-status' );
+		const progressLabel = statusSection && statusSection.querySelector( '.iss-progress__label' );
 		const stoppedText = ( CFG.i18n && CFG.i18n.stopped ) || 'Scan stopped.';
 
 		// Optimistically disable the button and signal the stop.
@@ -25,7 +25,7 @@ export function initStopScan() {
 			progressLabel.textContent = ( CFG.i18n && CFG.i18n.stopping ) || 'Stopping…';
 		}
 
-		fetchJSON( 'site_integrity_scanner_stop', {} )
+		fetchJSON( 'integrum_security_scanner_stop', {} )
 			.then( function () {
 				// The poller checks `stopped` via window.__llarStopped.
 				window.__llarStopped = true;
@@ -34,12 +34,12 @@ export function initStopScan() {
 					statusSection.hidden = true;
 				}
 				stopBtn.disabled = true;
-				const startBtn = document.querySelector( '.llar-scan-actions__start' );
+				const startBtn = document.querySelector( '.iss-scan-actions__start' );
 				if ( startBtn ) {
 					startBtn.disabled = false;
 				}
 
-				const wrap = document.querySelector( '.wrap.site-integrity-scanner' );
+				const wrap = document.querySelector( '.wrap.integrum-security-scanner' );
 				if ( wrap && wrap.parentNode ) {
 					const notice = document.createElement( 'div' );
 					notice.className = 'notice notice-info is-dismissible';

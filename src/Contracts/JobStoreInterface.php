@@ -5,12 +5,12 @@
  * Decouples ImunifyScanner from the storage mechanism (WP Transients API in
  * production, an in-memory map in tests). Every method is keyed by job id.
  *
- * @package Llar\SecurityScanner\Contracts
+ * @package Integrum\SecurityScanner\Contracts
  */
 
 declare( strict_types = 1 );
 
-namespace Llar\SecurityScanner\Contracts;
+namespace Integrum\SecurityScanner\Contracts;
 
 /**
  * Persists the mutable per-job state needed across status polls.

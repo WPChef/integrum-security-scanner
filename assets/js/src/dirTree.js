@@ -11,7 +11,7 @@
  */
 import { fetchJSON } from './ajax.js';
 
-const dirTreeEl = document.querySelector( '.llar-dirtree' );
+const dirTreeEl = document.querySelector( '.iss-dirtree' );
 let treeFlags = {};
 /** When true, directory checkboxes cannot be unchecked (active scan). */
 let dirTreeLocked = false;
@@ -80,8 +80,8 @@ export function initDirTree( onChange ) {
 	}
 
 	const notify = 'function' === typeof onChange ? onChange : function () {};
-	const flagsContainer = dirTreeEl.querySelector( '.llar-tree-flags' );
-	const startBtn = document.querySelector( '.llar-scan-actions__start' );
+	const flagsContainer = dirTreeEl.querySelector( '.iss-tree-flags' );
+	const startBtn = document.querySelector( '.iss-scan-actions__start' );
 	// Only manage the Start button when the server did not disable it
 	// (no key / running job) and no poller is active.
 	const guardAllowed = startBtn ? ! startBtn.disabled : false;
@@ -122,7 +122,7 @@ export function initDirTree( onChange ) {
 
 	function syncAll() {
 		Array.prototype.forEach.call(
-			dirTreeEl.querySelectorAll( '.llar-dirtree__node' ),
+			dirTreeEl.querySelectorAll( '.iss-dirtree__node' ),
 			syncRow
 		);
 	}
@@ -135,7 +135,7 @@ export function initDirTree( onChange ) {
 		Object.keys( treeFlags ).forEach( function ( rel ) {
 			const input = document.createElement( 'input' );
 			input.type = 'hidden';
-			input.name = treeFlags[ rel ] ? 'site_integrity_scanner_tree_on[]' : 'site_integrity_scanner_tree_off[]';
+			input.name = treeFlags[ rel ] ? 'integrum_security_scanner_tree_on[]' : 'integrum_security_scanner_tree_off[]';
 			input.value = rel;
 			flagsContainer.appendChild( input );
 		} );
@@ -164,35 +164,35 @@ export function initDirTree( onChange ) {
 
 	function buildChildRow( child ) {
 		const li = document.createElement( 'li' );
-		li.className = 'llar-tree__folder llar-dirtree__node';
+		li.className = 'iss-tree__folder iss-dirtree__node';
 		li.setAttribute( 'data-rel', child.rel );
 
 		const toggle = document.createElement( 'span' );
-		toggle.className = 'llar-tree__toggle';
+		toggle.className = 'iss-tree__toggle';
 		toggle.textContent = child.has_children ? '▸' : ' ';
 		li.appendChild( toggle );
 
 		const label = document.createElement( 'label' );
-		label.className = 'llar-dirtree__label inline-flex cursor-pointer items-center gap-2';
+		label.className = 'iss-dirtree__label inline-flex cursor-pointer items-center gap-2';
 
 		const input = document.createElement( 'input' );
 		input.type = 'checkbox';
 		input.className = 'rounded border-slate-300 text-primary-600 focus:ring-primary-500';
 		if ( child.slug ) {
-			input.name = 'site_integrity_scanner_directories[]';
+			input.name = 'integrum_security_scanner_directories[]';
 			input.value = child.slug;
 		}
 		label.appendChild( input );
 
 		const name = document.createElement( 'span' );
-		name.className = 'llar-tree__folder-name';
+		name.className = 'iss-tree__folder-name';
 		name.textContent = child.name + '/';
 		label.appendChild( name );
 
 		li.appendChild( label );
 
 		const kids = document.createElement( 'ul' );
-		kids.className = 'llar-tree__list';
+		kids.className = 'iss-tree__list';
 		kids.hidden = true;
 		li.appendChild( kids );
 
@@ -238,19 +238,19 @@ export function initDirTree( onChange ) {
 				kids.dataset.loaded = '1';
 				kids.hidden = false;
 
-				fetchJSON( 'site_integrity_scanner_dirchildren', { rel: rel } ).then( function ( payload ) {
+				fetchJSON( 'integrum_security_scanner_dirchildren', { rel: rel } ).then( function ( payload ) {
 					const children = ( payload && payload.data && payload.data.children ) || [];
 					children.forEach( function ( child ) {
 						// Skip folders already present: the preview/results renderer
 						// may have materialised them as synthetic rows before this
 						// lazy load ran — re-adding them would duplicate the row.
-						if ( kids.querySelector( ':scope > .llar-dirtree__node[data-rel="' + cssEscape( child.rel ) + '"]' ) ) {
+						if ( kids.querySelector( ':scope > .iss-dirtree__node[data-rel="' + cssEscape( child.rel ) + '"]' ) ) {
 							return;
 						}
 						const childRow = buildChildRow( child );
 						// Folder rows stay above file rows already attached by the
 						// results renderer (unified tree).
-						const firstFile = kids.querySelector( ':scope > .llar-tree__file' );
+						const firstFile = kids.querySelector( ':scope > .iss-tree__file' );
 						if ( firstFile ) {
 							kids.insertBefore( childRow, firstFile );
 						} else {
@@ -268,7 +268,7 @@ export function initDirTree( onChange ) {
 		}
 	}
 
-	Array.prototype.forEach.call( dirTreeEl.querySelectorAll( '.llar-dirtree__node' ), registerRow );
+	Array.prototype.forEach.call( dirTreeEl.querySelectorAll( '.iss-dirtree__node' ), registerRow );
 	syncAll();
 	syncHidden();
 	updateStartGuard();
@@ -284,7 +284,7 @@ export function initDirTree( onChange ) {
 		/** @return {string[]} Checked legacy slug checkboxes (no-JS fallback values). */
 			getSelectedSlugs: function () {
 				return Array.prototype.slice
-					.call( dirTreeEl.querySelectorAll( 'input[name="site_integrity_scanner_directories[]"]' ) )
+					.call( dirTreeEl.querySelectorAll( 'input[name="integrum_security_scanner_directories[]"]' ) )
 					.filter( function ( cb ) {
 						return cb.checked;
 					} )
@@ -309,7 +309,7 @@ export function initDirTree( onChange ) {
 			return null;
 		}
 
-		const root = dirTreeEl.querySelector( '.llar-dirtree__node[data-rel=""]' );
+		const root = dirTreeEl.querySelector( '.iss-dirtree__node[data-rel=""]' );
 		if ( ! root ) {
 			return null;
 		}
@@ -329,7 +329,7 @@ export function initDirTree( onChange ) {
 				return null;
 			}
 
-			let li = kids.querySelector( ':scope > .llar-dirtree__node[data-rel="' + cssEscape( prefix ) + '"]' );
+			let li = kids.querySelector( ':scope > .iss-dirtree__node[data-rel="' + cssEscape( prefix ) + '"]' );
 			if ( ! li ) {
 				li = buildSyntheticRow( prefix, seg, kids );
 			}
@@ -349,16 +349,16 @@ export function initDirTree( onChange ) {
 	 */
 	function buildSyntheticRow( rel, name, kids ) {
 		const li = document.createElement( 'li' );
-		li.className = 'llar-tree__folder llar-dirtree__node';
+		li.className = 'iss-tree__folder iss-dirtree__node';
 		li.setAttribute( 'data-rel', rel );
 
 		const toggle = document.createElement( 'span' );
-		toggle.className = 'llar-tree__toggle';
+		toggle.className = 'iss-tree__toggle';
 		toggle.textContent = '▸';
 		li.appendChild( toggle );
 
 		const label = document.createElement( 'label' );
-		label.className = 'llar-dirtree__label inline-flex cursor-pointer items-center gap-2';
+		label.className = 'iss-dirtree__label inline-flex cursor-pointer items-center gap-2';
 
 		// No slug: the checkbox is cosmetic (JS-driven scope), matching the
 		// server-rendered rows whose folder is not a registered scan option.
@@ -368,19 +368,19 @@ export function initDirTree( onChange ) {
 		label.appendChild( input );
 
 		const nameEl = document.createElement( 'span' );
-		nameEl.className = 'llar-tree__folder-name';
+		nameEl.className = 'iss-tree__folder-name';
 		nameEl.textContent = name + '/';
 		label.appendChild( nameEl );
 
 		li.appendChild( label );
 
 		const sub = document.createElement( 'ul' );
-		sub.className = 'llar-tree__list';
+		sub.className = 'iss-tree__list';
 		sub.hidden = true;
 		li.appendChild( sub );
 
 		// Folder rows stay above any attached file rows.
-		const firstFile = kids.querySelector( ':scope > .llar-tree__file' );
+		const firstFile = kids.querySelector( ':scope > .iss-tree__file' );
 		if ( firstFile ) {
 			kids.insertBefore( li, firstFile );
 		} else {

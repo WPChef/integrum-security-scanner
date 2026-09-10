@@ -5,14 +5,14 @@
  * Transient key names are identical to the previous inline implementation so
  * in-flight jobs survive the refactor.
  *
- * @package Llar\SecurityScanner\Models
+ * @package Integrum\SecurityScanner\Models
  */
 
 declare( strict_types = 1 );
 
-namespace Llar\SecurityScanner\Models;
+namespace Integrum\SecurityScanner\Models;
 
-use Llar\SecurityScanner\Contracts\JobStoreInterface;
+use Integrum\SecurityScanner\Contracts\JobStoreInterface;
 
 /**
  * Persists per-job scan state through set/get/delete_transient().
@@ -22,7 +22,7 @@ final class WpTransientJobStore implements JobStoreInterface {
 	/**
 	 * Transient name prefix shared by every per-job key.
 	 */
-	private const PREFIX = 'site_integrity_scanner_';
+	private const PREFIX = 'integrum_security_scanner_';
 
 	/**
 	 * Transient lifetime (1 hour) — long enough for a scan to finish, short

@@ -7,15 +7,15 @@
  *     page view, so the table shows the new run without a reload.
  *
  * Row markup is built here (not in PHP) for the refresh path, so the table
- * cells are styled via the .llar-history__* classes in the stylesheet, not
+ * cells are styled via the .iss-history__* classes in the stylesheet, not
  * Tailwind utilities that only exist in the server-rendered page.
  */
 import { CFG } from './config.js';
 import { fetchJSON } from './ajax.js';
 import { renderFile, dirname } from './fileTree.js';
 
-const bodyEl = document.querySelector( '.llar-history__body' );
-const emptyEl = document.querySelector( '.llar-history__empty' );
+const bodyEl = document.querySelector( '.iss-history__body' );
+const emptyEl = document.querySelector( '.iss-history__empty' );
 
 let runsCache = null;
 let fetchPromise = null;
@@ -30,7 +30,7 @@ function fetchRuns() {
 		return Promise.resolve( runsCache );
 	}
 	if ( ! fetchPromise ) {
-		fetchPromise = fetchJSON( 'site_integrity_scanner_history', {} )
+		fetchPromise = fetchJSON( 'integrum_security_scanner_history', {} )
 			.then( function ( payload ) {
 				fetchPromise = null;
 				runsCache = ( payload && payload.data && payload.data.runs ) || [];
@@ -81,38 +81,38 @@ function buildRunRows( run ) {
 	const frag = document.createDocumentFragment();
 
 	const row = document.createElement( 'tr' );
-	row.className = 'llar-history__row';
+	row.className = 'iss-history__row';
 	row.dataset.job = run.job_id;
 	row.setAttribute( 'aria-expanded', 'false' );
 
 	const dateTd = document.createElement( 'td' );
-	dateTd.className = 'llar-history__td';
+	dateTd.className = 'iss-history__td';
 	dateTd.textContent = run.date;
 	row.appendChild( dateTd );
 
 	const problemsTd = document.createElement( 'td' );
-	problemsTd.className = 'llar-history__td';
+	problemsTd.className = 'iss-history__td';
 	const count = document.createElement( 'span' );
-	count.className = 'llar-history__count' +
-		( run.problems > 0 ? ' llar-history__count--alert' : ' llar-history__count--ok' );
+	count.className = 'iss-history__count' +
+		( run.problems > 0 ? ' iss-history__count--alert' : ' iss-history__count--ok' );
 	count.textContent = String( run.problems );
 	problemsTd.appendChild( count );
 	row.appendChild( problemsTd );
 
 	const scannedTd = document.createElement( 'td' );
-	scannedTd.className = 'llar-history__td llar-history__td--muted';
+	scannedTd.className = 'iss-history__td iss-history__td--muted';
 	scannedTd.textContent = String( run.scanned );
 	row.appendChild( scannedTd );
 	frag.appendChild( row );
 
 	const detail = document.createElement( 'tr' );
-	detail.className = 'llar-history__detail';
+	detail.className = 'iss-history__detail';
 	detail.hidden = true;
 	const detailTd = document.createElement( 'td' );
 	detailTd.colSpan = 3;
-	detailTd.className = 'llar-history__detail-td';
+	detailTd.className = 'iss-history__detail-td';
 	const tree = document.createElement( 'div' );
-	tree.className = 'llar-tree llar-history__tree';
+	tree.className = 'iss-tree iss-history__tree';
 	tree.dataset.job = run.job_id;
 	detailTd.appendChild( tree );
 	detail.appendChild( detailTd );
@@ -130,12 +130,12 @@ function buildRunRows( run ) {
  */
 function buildTree( files ) {
 	const root = document.createElement( 'ul' );
-	root.className = 'llar-tree__list is-root';
+	root.className = 'iss-tree__list is-root';
 	const lists = { '': root };
 
 	if ( ! files.length ) {
 		const li = document.createElement( 'li' );
-		li.className = 'llar-history__no-files';
+		li.className = 'iss-history__no-files';
 		li.textContent = ( CFG.i18n && CFG.i18n.historyClean ) || 'No problem files in this scan.';
 		root.appendChild( li );
 		return root;
@@ -155,22 +155,22 @@ function buildTree( files ) {
 
 		const segs = rel.split( '/' );
 		const li = document.createElement( 'li' );
-		li.className = 'llar-tree__folder';
+		li.className = 'iss-tree__folder';
 		li.dataset.rel = rel;
 
 		const toggle = document.createElement( 'span' );
-		toggle.className = 'llar-tree__toggle';
+		toggle.className = 'iss-tree__toggle';
 		toggle.textContent = '▾';
 
 		const name = document.createElement( 'span' );
-		name.className = 'llar-tree__folder-name';
+		name.className = 'iss-tree__folder-name';
 		name.textContent = segs[ segs.length - 1 ] + '/';
 
 		li.appendChild( toggle );
 		li.appendChild( name );
 
 		const ul = document.createElement( 'ul' );
-		ul.className = 'llar-tree__list';
+		ul.className = 'iss-tree__list';
 		li.appendChild( ul );
 
 		folderList( segs.slice( 0, -1 ).join( '/' ) ).appendChild( li );
@@ -198,7 +198,7 @@ function buildTree( files ) {
  * @return {Promise<void>}
  */
 function ensureTree( detail ) {
-	const treeEl = detail.querySelector( '.llar-history__tree' );
+	const treeEl = detail.querySelector( '.iss-history__tree' );
 	if ( ! treeEl || treeEl.childElementCount ) {
 		return Promise.resolve();
 	}
@@ -215,12 +215,12 @@ function ensureTree( detail ) {
 
 if ( bodyEl ) {
 	bodyEl.addEventListener( 'click', function ( event ) {
-		const row = event.target.closest ? event.target.closest( '.llar-history__row' ) : null;
+		const row = event.target.closest ? event.target.closest( '.iss-history__row' ) : null;
 		if ( ! row ) {
 			return;
 		}
 		const detail = row.nextElementSibling;
-		if ( ! detail || ! detail.classList.contains( 'llar-history__detail' ) ) {
+		if ( ! detail || ! detail.classList.contains( 'iss-history__detail' ) ) {
 			return;
 		}
 

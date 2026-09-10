@@ -2,12 +2,12 @@
 /**
  * Credential storage contract.
  *
- * @package Llar\SecurityScanner\Contracts
+ * @package Integrum\SecurityScanner\Contracts
  */
 
 declare( strict_types = 1 );
 
-namespace Llar\SecurityScanner\Contracts;
+namespace Integrum\SecurityScanner\Contracts;
 
 interface CredentialStorageInterface {
 

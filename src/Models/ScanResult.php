@@ -2,12 +2,12 @@
 /**
  * Scan result DTO.
  *
- * @package Llar\SecurityScanner\Models
+ * @package Integrum\SecurityScanner\Models
  */
 
 declare( strict_types = 1 );
 
-namespace Llar\SecurityScanner\Models;
+namespace Integrum\SecurityScanner\Models;
 
 /**
  * Immutable scan result for a single file.

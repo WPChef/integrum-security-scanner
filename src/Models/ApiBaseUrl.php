@@ -2,12 +2,12 @@
 /**
  * Validates scanner / licensing API base URLs.
  *
- * @package Llar\SecurityScanner\Models
+ * @package Integrum\SecurityScanner\Models
  */
 
 declare( strict_types = 1 );
 
-namespace Llar\SecurityScanner\Models;
+namespace Integrum\SecurityScanner\Models;
 
 /**
  * Ensures API endpoints are absolute https URLs (http only when explicitly allowed).

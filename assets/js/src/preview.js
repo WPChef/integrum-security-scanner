@@ -17,11 +17,11 @@ import { clearResults } from './results.js';
  * @return {{schedule: Function}} Debounced refresh trigger.
  */
 export function initPreview( treeApi ) {
-	const previewCount   = document.querySelector( '.llar-preview__count' );
-	const previewEmpty   = document.querySelector( '.llar-preview__empty' );
-	const previewLoading = document.querySelector( '.llar-preview__loading' );
-	const includeInput   = document.getElementById( 'llar-include' );
-	const excludeInput   = document.getElementById( 'llar-exclude' );
+	const previewCount   = document.querySelector( '.iss-preview__count' );
+	const previewEmpty   = document.querySelector( '.iss-preview__empty' );
+	const previewLoading = document.querySelector( '.iss-preview__loading' );
+	const includeInput   = document.getElementById( 'iss-include' );
+	const excludeInput   = document.getElementById( 'iss-exclude' );
 	const PREVIEW_DEBOUNCE_MS = 300;
 
 	// Monotonic sequence: stale responses are dropped so a slow earlier
@@ -79,12 +79,12 @@ export function initPreview( treeApi ) {
 		} );
 		const selected = treeApi.getSelectedSlugs();
 
-		fetchJSON( 'site_integrity_scanner_preview', {
-			'site_integrity_scanner_directories[]': selected,
-			'site_integrity_scanner_tree_on[]':     onFlags,
-			'site_integrity_scanner_tree_off[]':    offFlags,
-			site_integrity_scanner_include:         includeInput ? includeInput.value : '',
-			site_integrity_scanner_exclude:         excludeInput ? excludeInput.value : '',
+		fetchJSON( 'integrum_security_scanner_preview', {
+			'integrum_security_scanner_directories[]': selected,
+			'integrum_security_scanner_tree_on[]':     onFlags,
+			'integrum_security_scanner_tree_off[]':    offFlags,
+			integrum_security_scanner_include:         includeInput ? includeInput.value : '',
+			integrum_security_scanner_exclude:         excludeInput ? excludeInput.value : '',
 		} ).then( function ( payload ) {
 			if ( seq !== previewSeq ) {
 				return; // A newer request has already taken over.

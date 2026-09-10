@@ -2,14 +2,14 @@
 /**
  * Credential storage backed by wp_options.
  *
- * @package Llar\SecurityScanner\Models
+ * @package Integrum\SecurityScanner\Models
  */
 
 declare( strict_types = 1 );
 
-namespace Llar\SecurityScanner\Models;
+namespace Integrum\SecurityScanner\Models;
 
-use Llar\SecurityScanner\Contracts\CredentialStorageInterface;
+use Integrum\SecurityScanner\Contracts\CredentialStorageInterface;
 
 /**
  * Stores site_id/site_key in a single option with autoload=false.
@@ -27,7 +27,7 @@ final class OptionsCredentialStorage implements CredentialStorageInterface {
 	 * @param string|null $key Override option key (used in tests).
 	 */
 	public function __construct( ?string $key = null ) {
-		$this->key = $key ?? ( defined( 'LLAR_SECURITY_SCANNER_OPTION_KEY' ) ? LLAR_SECURITY_SCANNER_OPTION_KEY : 'site_integrity_scanner_credentials' );
+		$this->key = $key ?? ( defined( 'INTEGRUM_SECURITY_SCANNER_OPTION_KEY' ) ? INTEGRUM_SECURITY_SCANNER_OPTION_KEY : 'integrum_security_scanner_credentials' );
 	}
 
 	/**

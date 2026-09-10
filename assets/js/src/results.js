@@ -9,9 +9,9 @@ import { fetchJSON } from './ajax.js';
 import { renderFile, dirname } from './fileTree.js';
 import { materializeFolder } from './dirTree.js';
 
-const treeEl = document.querySelector( '.llar-dirtree' );
-const filterWrap = document.getElementById( 'llar-only-suspicious-wrap' );
-const onlySuspicious = document.getElementById( 'llar-only-suspicious' );
+const treeEl = document.querySelector( '.iss-dirtree' );
+const filterWrap = document.getElementById( 'iss-only-suspicious-wrap' );
+const onlySuspicious = document.getElementById( 'iss-only-suspicious' );
 
 /**
  * Fetches the verdicts for a finished job and attaches them to the tree.
@@ -22,7 +22,7 @@ const onlySuspicious = document.getElementById( 'llar-only-suspicious' );
  * @return {Promise<Array<{file_path: string, status: string}>>}
  */
 export function loadResults( jobId ) {
-	return fetchJSON( 'site_integrity_scanner_results', { job_id: jobId } )
+	return fetchJSON( 'integrum_security_scanner_results', { job_id: jobId } )
 		.then( function ( payload ) {
 			const rows = ( payload && payload.data && payload.data.results ) || [];
 			attachResults( rows );
@@ -43,13 +43,13 @@ export function clearResults() {
 		return;
 	}
 	treeEl.classList.remove( 'is-complete' );
-	Array.prototype.forEach.call( treeEl.querySelectorAll( '.llar-tree__file' ), function ( el ) {
+	Array.prototype.forEach.call( treeEl.querySelectorAll( '.iss-tree__file' ), function ( el ) {
 		el.remove();
 	} );
-	Array.prototype.forEach.call( treeEl.querySelectorAll( '.llar-node-badge' ), function ( el ) {
+	Array.prototype.forEach.call( treeEl.querySelectorAll( '.iss-node-badge' ), function ( el ) {
 		el.remove();
 	} );
-	Array.prototype.forEach.call( treeEl.querySelectorAll( '.llar-tree__folder-name.has-problems' ), function ( el ) {
+	Array.prototype.forEach.call( treeEl.querySelectorAll( '.iss-tree__folder-name.has-problems' ), function ( el ) {
 		el.classList.remove( 'has-problems' );
 	} );
 	if ( filterWrap ) {
@@ -136,12 +136,12 @@ function addBadge( folder, s ) {
 
 	const badge = document.createElement( 'span' );
 	if ( s.alert > 0 ) {
-		badge.className = 'llar-node-badge llar-node-badge--alert' +
-			( s.infected > 0 ? ' llar-node-badge--infected' : '' );
+		badge.className = 'iss-node-badge iss-node-badge--alert' +
+			( s.infected > 0 ? ' iss-node-badge--infected' : '' );
 		badge.textContent = '⚠ ' + s.alert;
 		badge.title = s.alert + ' suspicious/infected file(s) in this subtree';
 	} else {
-		badge.className = 'llar-node-badge llar-node-badge--ok';
+		badge.className = 'iss-node-badge iss-node-badge--ok';
 		badge.textContent = '✓ ' + s.scanned;
 		badge.title = s.scanned + ' file(s) scanned, all clean';
 	}
@@ -154,7 +154,7 @@ function addBadge( folder, s ) {
  * @param {Element} folder Folder <li>.
  */
 function markProblems( folder ) {
-	const name = folder.querySelector( ':scope > .llar-dirtree__label .llar-tree__folder-name' );
+	const name = folder.querySelector( ':scope > .iss-dirtree__label .iss-tree__folder-name' );
 	if ( name ) {
 		name.classList.add( 'has-problems' );
 	}
@@ -171,7 +171,7 @@ function expandChain( folder ) {
 	const kids = folder.lastElementChild;
 	if ( kids && 'UL' === kids.tagName ) {
 		kids.hidden = false;
-		const ownToggle = folder.querySelector( ':scope > .llar-tree__toggle' );
+		const ownToggle = folder.querySelector( ':scope > .iss-tree__toggle' );
 		if ( ownToggle ) {
 			ownToggle.textContent = '▾';
 		}
@@ -180,10 +180,10 @@ function expandChain( folder ) {
 	// …then every ancestor list so the folder itself is reachable.
 	let el = folder;
 	while ( el && el !== treeEl ) {
-		if ( 'UL' === el.tagName && el.classList.contains( 'llar-tree__list' ) ) {
+		if ( 'UL' === el.tagName && el.classList.contains( 'iss-tree__list' ) ) {
 			el.hidden = false;
 			const owner = el.parentElement;
-			const toggle = owner && owner.querySelector( ':scope > .llar-tree__toggle' );
+			const toggle = owner && owner.querySelector( ':scope > .iss-tree__toggle' );
 			if ( toggle ) {
 				toggle.textContent = '▾';
 			}
@@ -207,7 +207,7 @@ export function applyFilter() {
 	}
 	const hide = ! onlySuspicious || onlySuspicious.checked;
 	const folders = [];
-	Array.prototype.forEach.call( treeEl.querySelectorAll( '.llar-tree__file' ), function ( el ) {
+	Array.prototype.forEach.call( treeEl.querySelectorAll( '.iss-tree__file' ), function ( el ) {
 		el.hidden = hide && el.classList.contains( 'is-clean' );
 		if ( ! hide ) {
 			const list = el.parentElement;

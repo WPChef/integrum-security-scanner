@@ -7,8 +7,8 @@
 import { setDirTreeLocked } from './dirTree.js';
 
 export function initStartForm() {
-	const startForm = document.querySelector( '.llar-start-form' );
-	const startBtn = document.querySelector( '.llar-scan-actions__start' );
+	const startForm = document.querySelector( '.iss-start-form' );
+	const startBtn = document.querySelector( '.iss-scan-actions__start' );
 	if ( ! startForm || ! startBtn ) {
 		return;
 	}

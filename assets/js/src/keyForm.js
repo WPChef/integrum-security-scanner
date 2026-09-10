@@ -7,14 +7,14 @@
 import { CFG } from './config.js';
 
 export function initKeyForm() {
-	const keyField = document.getElementById( 'llar-key' );
+	const keyField = document.getElementById( 'iss-key' );
 	const form = keyField && keyField.closest( 'form' );
-	const keyBtn = document.getElementById( 'llar-key-submit' );
-	const termsRow = document.getElementById( 'llar-terms-row' );
-	const termsCheckbox = document.getElementById( 'llar-terms-agree' );
-	const termsOpenBtn = document.querySelector( '.llar-terms-open' );
-	const termsDialog = document.getElementById( 'llar-terms-dialog' );
-	const termsCloseBtn = termsDialog && termsDialog.querySelector( '.llar-terms-close' );
+	const keyBtn = document.getElementById( 'iss-key-submit' );
+	const termsRow = document.getElementById( 'iss-terms-row' );
+	const termsCheckbox = document.getElementById( 'iss-terms-agree' );
+	const termsOpenBtn = document.querySelector( '.iss-terms-open' );
+	const termsDialog = document.getElementById( 'iss-terms-dialog' );
+	const termsCloseBtn = termsDialog && termsDialog.querySelector( '.iss-terms-close' );
 
 	if ( ! keyField || ! form || ! keyBtn ) {
 		return;
@@ -77,13 +77,13 @@ export function initKeyForm() {
 		} );
 	}
 
-	const toggleBtn = document.getElementById( 'llar-key-toggle' );
+	const toggleBtn = document.getElementById( 'iss-key-toggle' );
 	if ( ! toggleBtn ) {
 		return;
 	}
 
-	const iconOn = toggleBtn.querySelector( '.llar-key-icon:not(.llar-key-icon--off)' );
-	const iconOff = toggleBtn.querySelector( '.llar-key-icon--off' );
+	const iconOn = toggleBtn.querySelector( '.iss-key-icon:not(.iss-key-icon--off)' );
+	const iconOff = toggleBtn.querySelector( '.iss-key-icon--off' );
 
 	toggleBtn.addEventListener( 'click', function () {
 		const reveal = 'password' === keyField.type;

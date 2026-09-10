@@ -2,7 +2,7 @@
 
 /* Scope utilities inside the plugin root so they reliably override WP admin
    selectors without leaking into the rest of wp-admin. */
-@variant llar (&:is(#site-integrity-scanner-app, #site-integrity-scanner-app *));
+@variant llar (&:is(#integrum-security-scanner-app, #integrum-security-scanner-app *));
 
 @theme {
   --color-primary-50: #eef2ff;
@@ -25,18 +25,18 @@
  * badges and scan-progress elements at runtime.
  */
 
-#site-integrity-scanner-app {
-  --llar-muted: #64748b;
-  --llar-danger: #dc2626;
-  --llar-tree-hover: #f8fafc;
+#integrum-security-scanner-app {
+  --iss-muted: #64748b;
+  --iss-danger: #dc2626;
+  --iss-tree-hover: #f8fafc;
 }
 
 /* Spinner on the Start button while the manifest is being built server-side
    and the page has not yet reloaded with the active job. */
-.site-integrity-scanner .llar-scan-actions__start.is-loading {
+.integrum-security-scanner .iss-scan-actions__start.is-loading {
   position: relative;
 }
-.site-integrity-scanner .llar-scan-actions__start.is-loading::after {
+.integrum-security-scanner .iss-scan-actions__start.is-loading::after {
   content: '';
   display: inline-block;
   width: 14px;
@@ -45,15 +45,15 @@
   border: 2px solid currentColor;
   border-top-color: transparent;
   border-radius: 50%;
-  animation: llar-spin 0.7s linear infinite;
+  animation: iss-spin 0.7s linear infinite;
   vertical-align: middle;
 }
-@keyframes llar-spin {
+@keyframes iss-spin {
   to { transform: rotate(360deg); }
 }
 
 /* Results tree ----------------------------------------------------------- */
-.site-integrity-scanner .llar-tree {
+.integrum-security-scanner .iss-tree {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 13px;
   margin: 0;
@@ -62,70 +62,70 @@
   padding: 0;
 }
 
-.site-integrity-scanner .llar-tree__list {
+.integrum-security-scanner .iss-tree__list {
   list-style: none;
   margin: 0;
   padding: 0 0 0 18px;
 }
 
-.site-integrity-scanner .llar-tree__list.is-root {
+.integrum-security-scanner .iss-tree__list.is-root {
   padding-left: 0;
 }
 
-.site-integrity-scanner .llar-tree__folder {
+.integrum-security-scanner .iss-tree__folder {
   margin: 2px 0;
 }
 
-.site-integrity-scanner .llar-tree__toggle {
-  color: var(--llar-muted);
+.integrum-security-scanner .iss-tree__toggle {
+  color: var(--iss-muted);
   cursor: pointer;
   display: inline-block;
   text-align: center;
   width: 14px;
 }
 
-.site-integrity-scanner .llar-tree__folder-name {
+.integrum-security-scanner .iss-tree__folder-name {
   color: #1e293b;
   font-weight: 600;
 }
 
-.site-integrity-scanner .llar-tree__folder-name.has-problems {
-  color: var(--llar-danger);
+.integrum-security-scanner .iss-tree__folder-name.has-problems {
+  color: var(--iss-danger);
 }
 
-.site-integrity-scanner .llar-tree__file {
+.integrum-security-scanner .iss-tree__file {
   border-radius: 6px;
   margin: 1px 0 1px 14px;
   padding: 5px 8px;
   transition: background-color .15s ease;
 }
 
-.site-integrity-scanner .llar-tree__file:hover {
-  background: var(--llar-tree-hover);
+.integrum-security-scanner .iss-tree__file:hover {
+  background: var(--iss-tree-hover);
 }
 
-.site-integrity-scanner .llar-tree__file-name {
+.integrum-security-scanner .iss-tree__file-name {
   color: #334155;
   margin-right: 8px;
 }
 
-.site-integrity-scanner .llar-tree__threat {
-  color: var(--llar-muted);
+.integrum-security-scanner .iss-tree__threat {
+  color: var(--iss-muted);
   font-style: normal;
   margin-left: 6px;
 }
 
-.site-integrity-scanner .llar-tree__file.is-suspicious {
+.integrum-security-scanner .iss-tree__file.is-suspicious {
   background: #fff7ed;
 }
 
-.site-integrity-scanner .llar-tree__file.is-infected {
+.integrum-security-scanner .iss-tree__file.is-infected {
   background: #fef2f2;
   color: #b91c1c;
 }
 
 /* Severity badges -------------------------------------------------------- */
-.site-integrity-scanner .llar-sev {
+.integrum-security-scanner .iss-sev {
   border-radius: 9999px;
   color: #fff;
   font-size: 10px;
@@ -136,8 +136,8 @@
   text-transform: uppercase;
 }
 
-.site-integrity-scanner .llar-sev--critical { background: #b91c1c; }
-.site-integrity-scanner .llar-sev--high     { background: #dc2626; }
-.site-integrity-scanner .llar-sev--medium   { background: #d97706; }
-.site-integrity-scanner .llar-sev--low      { background: #0284c7; }
-.site-integrity-scanner .llar-sev--info     { background: #64748b; }
+.integrum-security-scanner .iss-sev--critical { background: #b91c1c; }
+.integrum-security-scanner .iss-sev--high     { background: #dc2626; }
+.integrum-security-scanner .iss-sev--medium   { background: #d97706; }
+.integrum-security-scanner .iss-sev--low      { background: #0284c7; }
+.integrum-security-scanner .iss-sev--info     { background: #64748b; }

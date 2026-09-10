@@ -2,14 +2,14 @@
 /**
  * Redacts credentials from log context arrays.
  *
- * @package Llar\SecurityScanner\Models
+ * @package Integrum\SecurityScanner\Models
  */
 
 declare( strict_types = 1 );
 
-namespace Llar\SecurityScanner\Models;
+namespace Integrum\SecurityScanner\Models;
 
-use Llar\SecurityScanner\Contracts\CredentialStorageInterface;
+use Integrum\SecurityScanner\Contracts\CredentialStorageInterface;
 
 /**
  * Masks site keys and known secret header/field names.

@@ -6,12 +6,12 @@
  * builder can be substituted (e.g. a cached or streamed implementation in
  * tests or for very large sites).
  *
- * @package Llar\SecurityScanner\Contracts
+ * @package Integrum\SecurityScanner\Contracts
  */
 
 declare( strict_types = 1 );
 
-namespace Llar\SecurityScanner\Contracts;
+namespace Integrum\SecurityScanner\Contracts;
 
 /**
  * Builds the list of candidate files to send to the scanner.

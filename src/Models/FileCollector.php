@@ -3,14 +3,14 @@
  * Collects candidate files for scanning by walking directories
  * and filtering through include/exclude glob masks.
  *
- * @package Llar\SecurityScanner\Models
+ * @package Integrum\SecurityScanner\Models
  */
 
 declare( strict_types = 1 );
 
-namespace Llar\SecurityScanner\Models;
+namespace Integrum\SecurityScanner\Models;
 
-use Llar\SecurityScanner\Contracts\FileCollectorInterface;
+use Integrum\SecurityScanner\Contracts\FileCollectorInterface;
 
 /**
  * Mask matcher + directory walker.
