@@ -301,15 +301,17 @@ final class ImunifyScanner implements \Integrum\SecurityScanner\Contracts\Scanne
 	/**
 	 * Resolves the root path used to compute relative file paths.
 	 *
-	 * Prefers ABSPATH (the WordPress root). When it is undefined (e.g. in unit
-	 * tests), falls back to the first selected directory so the collector's
-	 * relative paths line up with the manifest paths the scanner expects.
+	 * Prefers get_home_path() (the supported API for the WordPress install
+	 * root, same source as AdminController::site_root()). When it is
+	 * unavailable (e.g. in unit tests), falls back to the first selected
+	 * directory so the collector's relative paths line up with the manifest
+	 * paths the scanner expects.
 	 *
 	 * @param string[] $directories Absolute paths.
 	 */
 	private function resolve_root( array $directories ): string {
-		if ( defined( 'ABSPATH' ) ) {
-			return rtrim( (string) ABSPATH, '/\\' );
+		if ( function_exists( 'get_home_path' ) ) {
+			return rtrim( (string) get_home_path(), '/\\' );
 		}
 
 		$first = array() === $directories ? '' : (string) reset( $directories );

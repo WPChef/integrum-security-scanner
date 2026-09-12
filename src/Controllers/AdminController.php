@@ -546,7 +546,7 @@ final class AdminController {
 			$directories = $this->resolve_scan_directories( $dir_slugs, $allowed );
 		}
 
-		$files = $this->file_collector->collect( $directories, $include, $exclude, untrailingslashit( ABSPATH ) );
+		$files = $this->file_collector->collect( $directories, $include, $exclude, $this->site_root() );
 
 		wp_send_json_success(
 			array(
@@ -617,7 +617,7 @@ final class AdminController {
 	}
 
 	/**
-	 * Maps validated slugs to paths, falling back to the WP root when the
+	 * Maps validated slugs to paths, falling back to the site root when the
 	 * selection is empty (same rule for a real scan and for the preview).
 	 *
 	 * @param string[]             $slugs   Directory slugs.
@@ -627,7 +627,7 @@ final class AdminController {
 	private function resolve_scan_directories( array $slugs, array $allowed ): array {
 		$directories = $this->slugs_to_paths( $slugs, $allowed );
 		if ( array() === $directories ) {
-			$directories = array( untrailingslashit( ABSPATH ) );
+			$directories = array( $this->site_root() );
 		}
 
 		return $directories;
@@ -749,16 +749,17 @@ final class AdminController {
 	/**
 	 * Validates a tree-node relative path and returns its absolute path.
 	 *
-	 * The path must resolve inside ABSPATH (realpath containment) and be a
-	 * directory; '' maps to ABSPATH itself. Returns null for anything else.
+	 * The path must resolve inside the site root (realpath containment) and be
+	 * a directory; '' maps to the site root itself. Returns null for anything
+	 * else.
 	 *
 	 * @param string $rel Relative path ('' = site root).
 	 * @return string|null Absolute path, or null when invalid.
 	 */
 	private function validate_rel_dir( string $rel ): ?string {
-		$root = realpath( untrailingslashit( ABSPATH ) );
+		$root = realpath( $this->site_root() );
 		if ( false === $root || ! is_string( $root ) ) {
-			$root = untrailingslashit( ABSPATH );
+			$root = $this->site_root();
 		}
 
 		$rel = trim( str_replace( '\\', '/', $rel ), '/' );
@@ -1018,12 +1019,22 @@ final class AdminController {
 	}
 
 	/**
+	 * Absolute path to the site root without a trailing slash.
+	 *
+	 * Uses get_home_path(), the supported API for the WordPress install root
+	 * (covers installs where WordPress lives in a subdirectory).
+	 */
+	private function site_root(): string {
+		return untrailingslashit( get_home_path() );
+	}
+
+	/**
 	 * Builds the selectable directory map [slug => absolute path].
 	 *
 	 * @return array<string, string>
 	 */
 	private function directory_options(): array {
-		$root = untrailingslashit( ABSPATH );
+		$root = $this->site_root();
 
 		$options = array(
 			'root'        => $root,

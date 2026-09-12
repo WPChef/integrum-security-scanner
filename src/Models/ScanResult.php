@@ -29,7 +29,7 @@ final class ScanResult {
 	/**
 	 * Constructor.
 	 *
-	 * @param string                $file_path   Relative path from ABSPATH.
+	 * @param string                $file_path   Relative path from the site root.
 	 * @param string                $status      clean|infected|suspicious|error.
 	 * @param string                $threat_type Threat class (empty if clean).
 	 * @param string                $severity    info|low|medium|high|critical.
