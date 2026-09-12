@@ -80,7 +80,7 @@ final class AdminController {
 	 */
 	public function add_menu(): void {
 		add_menu_page(
-			__( 'Site Security Scanner', 'integrum-security-scanner' ),
+			__( 'Integrum Security Scanner', 'integrum-security-scanner' ),
 			__( 'Site Security', 'integrum-security-scanner' ),
 			self::CAPABILITY,
 			self::SLUG,

@@ -42,7 +42,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 			<span class="dashicons dashicons-shield-alt text-xl" aria-hidden="true"></span>
 		</span>
 		<div class="min-w-0">
-			<h1 class="!m-0 !text-2xl !font-semibold !leading-tight !text-slate-800"><?php esc_html_e( 'Site Security Scanner', 'integrum-security-scanner' ); ?></h1>
+			<h1 class="!m-0 !text-2xl !font-semibold !leading-tight !text-slate-800"><?php esc_html_e( 'Integrum Security Scanner', 'integrum-security-scanner' ); ?></h1>
 			<p class="!m-0 !text-sm !text-slate-500"><?php esc_html_e( 'Scan your site files for malicious code.', 'integrum-security-scanner' ); ?></p>
 		</div>
 		<?php if ( $has_key ) : ?>
