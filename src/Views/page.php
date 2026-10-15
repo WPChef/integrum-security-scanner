@@ -137,11 +137,11 @@ if ( ! defined( 'ABSPATH' ) ) {
 							<button
 								type="button"
 								class="iss-terms-open cursor-pointer border-0 bg-transparent p-0 text-inherit underline decoration-dotted underline-offset-2 hover:text-slate-800"
-							><?php esc_html_e( 'Integrum Terms of Service and Malware Scanning Terms', 'integrum-security-scanner' ); ?></button><?php
+							><?php esc_html_e( 'Limit Login Attempts Reloaded Terms of Service and Malware Scanning Terms', 'integrum-security-scanner' ); ?></button><?php
 							printf(
 								wp_kses(
 									/* translators: 1: Privacy Policy label, 2: Imunify partner. */
-									__( ', and acknowledge the %1$s. Malware scanning is provided by Integrum in partnership with %2$s', 'integrum-security-scanner' ),
+									__( ', and acknowledge the %1$s. Malware scanning is provided by Limit Login Attempts Reloaded in partnership with %2$s', 'integrum-security-scanner' ),
 									array( 'strong' => array() )
 								),
 								'<strong>' . esc_html__( 'Privacy Policy', 'integrum-security-scanner' ) . '</strong>',
@@ -270,7 +270,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 							type="text"
 							id="iss-include"
 							name="integrum_security_scanner_include"
-							placeholder="*.php"
+							placeholder="Example: *.php"
 							value="<?php echo esc_attr( $settings['include'] ); ?>"
 							class="block w-full rounded-md border border-slate-300 bg-white px-3 py-2 font-mono text-sm text-slate-800 shadow-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-500/30"
 						/>
@@ -281,7 +281,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 							type="text"
 							id="iss-exclude"
 							name="integrum_security_scanner_exclude"
-							placeholder="*/cache/*"
+							placeholder="Example: */cache/*"
 							value="<?php echo esc_attr( $settings['exclude'] ); ?>"
 							class="block w-full rounded-md border border-slate-300 bg-white px-3 py-2 font-mono text-sm text-slate-800 shadow-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-500/30"
 						/>
