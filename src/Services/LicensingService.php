@@ -43,9 +43,9 @@ final class LicensingService {
 	 * Registers the site and stores the returned credentials.
 	 *
 	 * The returned notice message is plain text; the caller must escape it for
-	 * the output context (it carries no markup). On HTTP 400 the API-provided
-	 * error text is surfaced verbatim, so the message may come straight from
-	 * the remote service.
+	 * the output context (it carries no markup). On any error response the
+	 * API-provided error text is surfaced verbatim, so the message may come
+	 * straight from the remote service.
 	 *
 	 * @param string $domain Site domain.
 	 * @param string $email  Owner email.
@@ -85,11 +85,23 @@ final class LicensingService {
 		}
 
 		if ( $resp['code'] < 200 || $resp['code'] >= 300 || empty( $resp['body']['site_key'] ) ) {
-			$this->logger->error( 'site registration bad response', array( 'code' => $resp['code'] ) );
+			$this->logger->error(
+				'site registration bad response',
+				array(
+					'code' => $resp['code'],
+					'body' => $resp['body'],
+				)
+			);
 
+			// Surface the cloud's own reason whenever the body carries one,
+			// regardless of the HTTP code — the generic message hides the real
+			// cause (e.g. a 403/409/500 with a readable error payload).
 			return array(
 				'type'    => 'error',
-				'message' => __( 'Could not obtain a site key. Please try again.', 'integrum-security-scanner' ),
+				'message' => $this->api_error_message(
+					is_array( $resp['body'] ?? null ) ? $resp['body'] : array(),
+					__( 'Could not obtain a site key. Please try again.', 'integrum-security-scanner' )
+				),
 			);
 		}
 
@@ -107,18 +119,19 @@ final class LicensingService {
 	}
 
 	/**
-	 * Builds the notice text for an HTTP 400 registration rejection.
+	 * Builds the notice text for a rejected registration.
 	 *
 	 * The API's own reason is surfaced as-is (mock: `error`, live API:
 	 * `message`) so a server-side failure shows its real cause instead of a
 	 * misleading "already registered". Only a genuine duplicate-domain
 	 * rejection keeps the paste-key hint; a body without a readable reason
-	 * falls back to a generic message.
+	 * falls back to $fallback (or the generic message when empty).
 	 *
-	 * @param array<string, mixed> $body Decoded response body.
+	 * @param array<string, mixed> $body     Decoded response body.
+	 * @param string               $fallback Message for a body without a readable reason.
 	 * @return string Plain-text notice message.
 	 */
-	private function api_error_message( array $body ): string {
+	private function api_error_message( array $body, string $fallback = '' ): string {
 		$text = '';
 
 		foreach ( array( 'error', 'message' ) as $key ) {
@@ -129,7 +142,7 @@ final class LicensingService {
 		}
 
 		if ( '' === $text ) {
-			return __( 'Registration failed. Please try again.', 'integrum-security-scanner' );
+			return '' !== $fallback ? $fallback : __( 'Registration failed. Please try again.', 'integrum-security-scanner' );
 		}
 
 		if ( false !== stripos( $text, 'already' ) ) {

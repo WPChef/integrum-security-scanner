@@ -20,7 +20,8 @@
  * @var string|null                                 $site_key
  * @var bool                                        $has_key
  * @var string                                      $job_id
- * @var array{type: string, message: string, scope: string}|null    $notice
+ * @var array{type: string, message: string, scope: string, email: string}|null $notice
+ * @var string                                      $email_value Email prefill for the connection form.
  * @var array<string, string>                       $dir_options
  * @var array{directories: string[], include: string, exclude: string, tree: array<string,bool>} $settings
  * @var array<string,bool>                          $tree_flags
@@ -88,7 +89,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 						id="iss-email"
 						name="integrum_security_scanner_email"
 						required
-						value="<?php echo esc_attr( wp_get_current_user()->user_email ); ?>"
+						value="<?php echo esc_attr( $email_value ); ?>"
 						class="block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-500/30"
 					/>
 				</div>
@@ -133,19 +134,25 @@ if ( ! defined( 'ABSPATH' ) ) {
 							<?php echo $has_key ? '' : 'required'; ?>
 						/>
 						<span class="text-sm leading-relaxed text-slate-600">
-							<?php esc_html_e( 'I agree to the', 'integrum-security-scanner' ); ?>
-							<button
-								type="button"
-								class="iss-terms-open cursor-pointer border-0 bg-transparent p-0 text-inherit underline decoration-dotted underline-offset-2 hover:text-slate-800"
-							><?php esc_html_e( 'Integrum Terms of Service and Malware Scanning Terms', 'integrum-security-scanner' ); ?></button><?php
+							<?php
 							printf(
 								wp_kses(
-									/* translators: 1: Privacy Policy label, 2: Imunify partner. */
-									__( ', and acknowledge the %1$s. Malware scanning is provided by Integrum in partnership with %2$s', 'integrum-security-scanner' ),
-									array( 'strong' => array() )
+									/* translators: 1: product name (bold), 2: Terms of Service link, 3: Malware Scanning Terms link, 4: Privacy Policy link, 5: product name (bold), 6: partner name (bold). */
+									__( 'I agree to the %1$s %2$s and %3$s, and acknowledge the %4$s. Malware scanning is provided by %5$s in partnership with %6$s.', 'integrum-security-scanner' ),
+									array(
+										'strong' => array(),
+										'button' => array(
+											'type'  => array(),
+											'class' => array(),
+										),
+									)
 								),
-								'<strong>' . esc_html__( 'Privacy Policy', 'integrum-security-scanner' ) . '</strong>',
-								'<strong>' . esc_html__( 'Imunify by CloudLinux.', 'integrum-security-scanner' ) . '</strong>'
+								'<strong>' . esc_html__( 'Limit Login Attempts Reloaded', 'integrum-security-scanner' ) . '</strong>',
+								'<button type="button" class="iss-terms-open cursor-pointer border-0 bg-transparent p-0 text-inherit underline decoration-dotted underline-offset-2 hover:text-slate-800">' . esc_html__( 'Terms of Service', 'integrum-security-scanner' ) . '</button>',
+								'<button type="button" class="iss-terms-open cursor-pointer border-0 bg-transparent p-0 text-inherit underline decoration-dotted underline-offset-2 hover:text-slate-800">' . esc_html__( 'Malware Scanning Terms', 'integrum-security-scanner' ) . '</button>',
+								'<button type="button" class="iss-terms-open cursor-pointer border-0 bg-transparent p-0 text-inherit underline decoration-dotted underline-offset-2 hover:text-slate-800">' . esc_html__( 'Privacy Policy', 'integrum-security-scanner' ) . '</button>',
+								'<strong>' . esc_html__( 'Limit Login Attempts Reloaded', 'integrum-security-scanner' ) . '</strong>',
+								'<strong>' . esc_html__( 'Imunify by CloudLinux', 'integrum-security-scanner' ) . '</strong>'
 							);
 							?>
 						</span>
@@ -258,6 +265,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 								</li>
 							</ul>
 							<div class="iss-tree-flags" hidden></div>
+							<!-- Semi-transparent "loadinfo" layer toggled by admin.js while
+								the files-to-scan preview walks the filesystem. -->
+							<div class="iss-tree-overlay" aria-hidden="true"><span class="iss-spinner"></span></div>
 						</div>
 						<p class="iss-preview__loading !m-0 !mt-2 text-xs text-slate-500"><?php esc_html_e( 'Loading…', 'integrum-security-scanner' ); ?></p>
 						<p class="iss-preview__empty !m-0 !mt-2 text-xs text-slate-500" hidden><?php esc_html_e( 'No files match the current settings.', 'integrum-security-scanner' ); ?></p>

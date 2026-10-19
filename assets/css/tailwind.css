@@ -31,12 +31,15 @@
   --iss-tree-hover: #f8fafc;
 }
 
-/* Spinner on the Start button while the manifest is being built server-side
-   and the page has not yet reloaded with the active job. */
-.integrum-security-scanner .iss-scan-actions__start.is-loading {
+/* Spinner ("loadinfo") on action buttons while the server processes the
+   request and the page has not yet reloaded: Start Scan (manifest build)
+   and Register / Save key (licensing call). */
+.integrum-security-scanner .iss-scan-actions__start.is-loading,
+.integrum-security-scanner #iss-key-submit.is-loading {
   position: relative;
 }
-.integrum-security-scanner .iss-scan-actions__start.is-loading::after {
+.integrum-security-scanner .iss-scan-actions__start.is-loading::after,
+.integrum-security-scanner #iss-key-submit.is-loading::after {
   content: '';
   display: inline-block;
   width: 14px;
@@ -50,6 +53,35 @@
 }
 @keyframes iss-spin {
   to { transform: rotate(360deg); }
+}
+
+/* Semi-transparent layer with a centered spinner laid over the directory
+   tree while the files-to-scan preview walks the filesystem. */
+.integrum-security-scanner .iss-dirtree {
+  position: relative;
+}
+.integrum-security-scanner .iss-tree-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgb(255 255 255 / 0.6);
+  /* Visual cue only: never block interaction with the tree underneath. */
+  pointer-events: none;
+}
+.integrum-security-scanner .iss-tree-overlay.is-active {
+  display: flex;
+}
+.integrum-security-scanner .iss-spinner {
+  display: inline-block;
+  width: 22px;
+  height: 22px;
+  border: 3px solid rgb(79 70 229 / 0.25);
+  border-top-color: #4f46e5;
+  border-radius: 50%;
+  animation: iss-spin 0.7s linear infinite;
 }
 
 /* Results tree ----------------------------------------------------------- */

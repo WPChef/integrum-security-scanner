@@ -9,7 +9,7 @@
     const keyBtn = document.getElementById("iss-key-submit");
     const termsRow = document.getElementById("iss-terms-row");
     const termsCheckbox = document.getElementById("iss-terms-agree");
-    const termsOpenBtn = document.querySelector(".iss-terms-open");
+    const termsOpenBtns = document.querySelectorAll(".iss-terms-open");
     const termsDialog = document.getElementById("iss-terms-dialog");
     const termsCloseBtn = termsDialog && termsDialog.querySelector(".iss-terms-close");
     if (!keyField || !form || !keyBtn) {
@@ -40,12 +40,17 @@
     form.addEventListener("submit", function(event) {
       if (isRegisterMode() && termsCheckbox && !termsCheckbox.checked) {
         event.preventDefault();
+        return;
       }
+      keyBtn.classList.add("is-loading");
+      keyBtn.disabled = true;
     });
     updateKeyBtn();
-    if (termsOpenBtn && termsDialog && "function" === typeof termsDialog.showModal) {
-      termsOpenBtn.addEventListener("click", function() {
-        termsDialog.showModal();
+    if (termsOpenBtns.length && termsDialog && "function" === typeof termsDialog.showModal) {
+      Array.prototype.forEach.call(termsOpenBtns, function(btn) {
+        btn.addEventListener("click", function() {
+          termsDialog.showModal();
+        });
       });
       if (termsCloseBtn) {
         termsCloseBtn.addEventListener("click", function() {
@@ -709,13 +714,21 @@
     const previewCount = document.querySelector(".iss-preview__count");
     const previewEmpty = document.querySelector(".iss-preview__empty");
     const previewLoading = document.querySelector(".iss-preview__loading");
+    const treeOverlay = document.querySelector(".iss-tree-overlay");
     const includeInput = document.getElementById("iss-include");
     const excludeInput = document.getElementById("iss-exclude");
     const PREVIEW_DEBOUNCE_MS = 300;
+    const connected = CFG.hasKey === "1" || CFG.hasKey === true;
     let previewSeq = 0;
     let previewTimer = null;
+    function setTreeOverlay(on) {
+      if (treeOverlay) {
+        treeOverlay.classList.toggle("is-active", !!on);
+      }
+    }
     function renderPreview(payload) {
       const files = payload && payload.data && payload.data.files || [];
+      setTreeOverlay(false);
       if (previewLoading) {
         previewLoading.hidden = true;
       }
@@ -754,6 +767,7 @@
         (flags[rel] ? onFlags : offFlags).push(rel);
       });
       const selected = treeApi2.getSelectedSlugs();
+      setTreeOverlay(true);
       fetchJSON("integrum_security_scanner_preview", {
         "integrum_security_scanner_directories[]": selected,
         "integrum_security_scanner_tree_on[]": onFlags,
@@ -769,12 +783,16 @@
         if (seq !== previewSeq) {
           return;
         }
+        setTreeOverlay(false);
         if (previewLoading) {
           previewLoading.textContent = CFG.i18n ? CFG.i18n.error : "error";
         }
       });
     }
     function schedule() {
+      if (!connected) {
+        return;
+      }
       if (previewTimer) {
         window.clearTimeout(previewTimer);
       }
@@ -785,6 +803,9 @@
     }
     if (excludeInput) {
       excludeInput.addEventListener("input", schedule);
+    }
+    if (!connected && previewLoading) {
+      previewLoading.hidden = true;
     }
     schedule();
     return { schedule };

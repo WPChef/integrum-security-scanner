@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 >
 	<div class="flex items-start justify-between gap-4 border-b border-slate-200 px-6 py-4">
 		<h3 id="iss-terms-dialog-title" class="!m-0 !text-base !font-semibold !leading-snug !text-slate-800">
-			<?php esc_html_e( 'Integrum Terms of Service and Malware Scanning Terms', 'integrum-security-scanner' ); ?>
+			<?php esc_html_e( 'Limit Login Attempts Reloaded Terms of Service and Malware Scanning Terms', 'integrum-security-scanner' ); ?>
 		</h3>
 		<button
 			type="button"
@@ -33,11 +33,11 @@ if ( ! defined( 'ABSPATH' ) ) {
 		<p><?php
 		printf(
 			wp_kses(
-				/* translators: 1: Integrum provider, 2: Imunify partner. */
+				/* translators: 1: provider, 2: Imunify partner. */
 				__( 'The malware scanning service is provided by %1$s in partnership with %2$s', 'integrum-security-scanner' ),
 				array( 'strong' => array() )
 			),
-			'<strong>' . esc_html__( 'Integrum', 'integrum-security-scanner' ) . '</strong>',
+			'<strong>' . esc_html__( 'Limit Login Attempts Reloaded', 'integrum-security-scanner' ) . '</strong>',
 			'<strong>' . esc_html__( 'Imunify by CloudLinux.', 'integrum-security-scanner' ) . '</strong>'
 		);
 		?></p>
