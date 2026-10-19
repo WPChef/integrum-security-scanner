@@ -270,7 +270,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 							type="text"
 							id="iss-include"
 							name="integrum_security_scanner_include"
-							placeholder="*.php"
+							placeholder="Example: *.php"
 							value="<?php echo esc_attr( $settings['include'] ); ?>"
 							class="block w-full rounded-md border border-slate-300 bg-white px-3 py-2 font-mono text-sm text-slate-800 shadow-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-500/30"
 						/>
@@ -281,7 +281,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 							type="text"
 							id="iss-exclude"
 							name="integrum_security_scanner_exclude"
-							placeholder="*/cache/*"
+							placeholder="Example: */cache/*"
 							value="<?php echo esc_attr( $settings['exclude'] ); ?>"
 							class="block w-full rounded-md border border-slate-300 bg-white px-3 py-2 font-mono text-sm text-slate-800 shadow-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-500/30"
 						/>
