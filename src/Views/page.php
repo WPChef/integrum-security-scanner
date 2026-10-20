@@ -149,8 +149,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 							echo wp_kses(
 								$consent_html,
 								array(
-									'strong' => array(),
-									'button' => array(
+									'strong'  => array(),
+									'button'  => array(
 										'type'  => array(),
 										'class' => array(),
 									),
