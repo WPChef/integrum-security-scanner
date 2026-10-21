@@ -42,8 +42,10 @@
         event.preventDefault();
         return;
       }
-      keyBtn.classList.add("is-loading");
-      keyBtn.disabled = true;
+      window.setTimeout(function() {
+        keyBtn.classList.add("is-loading");
+        keyBtn.disabled = true;
+      }, 0);
     });
     updateKeyBtn();
     if (termsOpenBtns.length && termsDialog && "function" === typeof termsDialog.showModal) {
@@ -718,7 +720,7 @@
     const includeInput = document.getElementById("iss-include");
     const excludeInput = document.getElementById("iss-exclude");
     const PREVIEW_DEBOUNCE_MS = 300;
-    const connected = CFG.hasKey === "1" || CFG.hasKey === true;
+    const connected = CFG.hasKey === "1";
     let previewSeq = 0;
     let previewTimer = null;
     function setTreeOverlay(on) {

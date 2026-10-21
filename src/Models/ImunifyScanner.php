@@ -597,17 +597,17 @@ final class ImunifyScanner implements \Integrum\SecurityScanner\Contracts\Scanne
 		// is ours, not the API's: the raw "Scan quota exceeded" reads like a
 		// technical failure, so the user gets the plan explanation instead.
 		if ( 403 === $http_code && 'quota_exceeded' === $api_code ) {
-			$msg    = __( "You've used all your scans on the free plan.", 'integrum-security-scanner' );
-			$quota  = is_array( $body['quota'] ?? null ) ? $body['quota'] : array();
+			$msg   = __( "You've used all your scans on the free plan.", 'integrum-security-scanner' );
+			$quota = is_array( $body['quota'] ?? null ) ? $body['quota'] : array();
+			// The free plan resets monthly; fall back to 30 days when the API
+			// omits the reset interval so the message keeps its full wording.
 			$resets = (int) ( $quota['resets_in'] ?? 0 );
-			if ( $resets > 0 ) {
-				$days = max( 1, (int) round( $resets / 86400 ) );
-				$msg .= ' ' . sprintf(
-					/* translators: %d: number of days until the scan quota resets. */
-					_n( 'You can scan again in %d day.', 'You can scan again in %d days.', $days, 'integrum-security-scanner' ),
-					$days
-				);
-			}
+			$days   = $resets > 0 ? max( 1, (int) round( $resets / 86400 ) ) : 30;
+			$msg   .= ' ' . sprintf(
+				/* translators: %d: number of days until the scan quota resets. */
+				_n( 'You can scan again in %d day.', 'You can scan again in %d days.', $days, 'integrum-security-scanner' ),
+				$days
+			);
 			return new ScanException( $msg, 403 );
 		}
 

@@ -1139,7 +1139,7 @@ final class AdminController {
 		// The email typed into the connection form rides along with the notice
 		// so the field keeps the submitted value after the PRG redirect
 		// instead of reverting to the WP profile email.
-		$email = isset( $notice['email'] ) && is_string( $notice['email'] ) ? sanitize_email( $notice['email'] ) : '';
+		$email = isset( $notice['email'] ) && is_string( $notice['email'] ) ? $notice['email'] : '';
 
 		return array(
 			'type'    => $type,

@@ -77,19 +77,24 @@ final class LicensingService {
 			);
 		}
 
+		$body = is_array( $resp['body'] ?? null ) ? $resp['body'] : array();
+
 		if ( 400 === $resp['code'] ) {
 			return array(
 				'type'    => 'error',
-				'message' => $this->api_error_message( $resp['body'] ),
+				'message' => $this->api_error_message( $body, '', 400 ),
 			);
 		}
 
-		if ( $resp['code'] < 200 || $resp['code'] >= 300 || empty( $resp['body']['site_key'] ) ) {
+		if ( $resp['code'] < 200 || $resp['code'] >= 300 || empty( $body['site_key'] ) ) {
+			// Log only the readable reason, not the raw body: the redactor is
+			// shallow, so a nested body would carry the registration email (and
+			// possibly credentials) into debug.log unchecked.
 			$this->logger->error(
 				'site registration bad response',
 				array(
-					'code' => $resp['code'],
-					'body' => $resp['body'],
+					'code'    => $resp['code'],
+					'message' => $this->api_error_text( $body ),
 				)
 			);
 
@@ -99,13 +104,13 @@ final class LicensingService {
 			return array(
 				'type'    => 'error',
 				'message' => $this->api_error_message(
-					is_array( $resp['body'] ?? null ) ? $resp['body'] : array(),
-					__( 'Could not obtain a site key. Please try again.', 'integrum-security-scanner' )
+					$body,
+					__( 'Could not obtain a site key. Please try again.', 'integrum-security-scanner' ),
+					(int) $resp['code']
 				),
 			);
 		}
 
-		$body = $resp['body'];
 		$this->storage->set_credentials( (string) $body['site_id'], (string) $body['site_key'] );
 
 		return array(
@@ -127,28 +132,40 @@ final class LicensingService {
 	 * rejection keeps the paste-key hint; a body without a readable reason
 	 * falls back to $fallback (or the generic message when empty).
 	 *
-	 * @param array<string, mixed> $body     Decoded response body.
-	 * @param string               $fallback Message for a body without a readable reason.
+	 * @param array<string, mixed> $body      Decoded response body.
+	 * @param string               $fallback  Message for a body without a readable reason.
+	 * @param int                  $http_code HTTP status behind the body (0 when unknown).
 	 * @return string Plain-text notice message.
 	 */
-	private function api_error_message( array $body, string $fallback = '' ): string {
-		$text = '';
-
-		foreach ( array( 'error', 'message' ) as $key ) {
-			if ( isset( $body[ $key ] ) && is_string( $body[ $key ] ) && '' !== trim( $body[ $key ] ) ) {
-				$text = trim( $body[ $key ] );
-				break;
-			}
-		}
+	private function api_error_message( array $body, string $fallback = '', int $http_code = 0 ): string {
+		$text = $this->api_error_text( $body );
 
 		if ( '' === $text ) {
 			return '' !== $fallback ? $fallback : __( 'Registration failed. Please try again.', 'integrum-security-scanner' );
 		}
 
-		if ( false !== stripos( $text, 'already' ) ) {
+		// Only a client-side rejection can mean "this domain is already taken";
+		// a 5xx body mentioning "already" is a server failure, not a duplicate.
+		if ( $http_code >= 400 && $http_code < 500 && false !== stripos( $text, 'already' ) ) {
 			return rtrim( $text, ' .' ) . '. ' . __( 'Paste the site key in the field below and save it manually.', 'integrum-security-scanner' );
 		}
 
 		return $text;
+	}
+
+	/**
+	 * Extracts the first non-empty error string from a response body.
+	 *
+	 * @param array<string, mixed> $body Decoded response body.
+	 * @return string Error text, or an empty string when the body has none.
+	 */
+	private function api_error_text( array $body ): string {
+		foreach ( array( 'error', 'message' ) as $key ) {
+			if ( isset( $body[ $key ] ) && is_string( $body[ $key ] ) && '' !== trim( $body[ $key ] ) ) {
+				return trim( $body[ $key ] );
+			}
+		}
+
+		return '';
 	}
 }

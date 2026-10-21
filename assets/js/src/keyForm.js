@@ -59,9 +59,12 @@ export function initKeyForm() {
 			return;
 		}
 		// Real submission: show "loadinfo" on the button while the request
-		// is processed server-side and the page reloads.
-		keyBtn.classList.add( 'is-loading' );
-		keyBtn.disabled = true;
+		// is processed server-side and the page reloads. Deferred so disabling
+		// the button can never cancel the navigation in any browser.
+		window.setTimeout( function () {
+			keyBtn.classList.add( 'is-loading' );
+			keyBtn.disabled = true;
+		}, 0 );
 	} );
 
 	updateKeyBtn();

@@ -8,7 +8,7 @@
  *
  * @package Integrum\SecurityScanner\Views
  *
- * @var array{type: string, message: string, scope: string} $notice
+ * @var array{type: string, message: string, scope: string, email: string} $notice
  */
 
 declare( strict_types = 1 );

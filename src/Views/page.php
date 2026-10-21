@@ -135,24 +135,26 @@ if ( ! defined( 'ABSPATH' ) ) {
 						/>
 						<span class="text-sm leading-relaxed text-slate-600">
 							<?php
-							printf(
-								wp_kses(
-									/* translators: 1: product name (bold), 2: Terms of Service link, 3: Malware Scanning Terms link, 4: Privacy Policy link, 5: product name (bold), 6: partner name (bold). */
-									__( 'I agree to the %1$s %2$s and %3$s, and acknowledge the %4$s. Malware scanning is provided by %5$s in partnership with %6$s.', 'integrum-security-scanner' ),
-									array(
-										'strong' => array(),
-										'button' => array(
-											'type'  => array(),
-											'class' => array(),
-										),
-									)
-								),
+							$terms_btn_class = 'iss-terms-open cursor-pointer border-0 bg-transparent p-0 text-inherit underline decoration-dotted underline-offset-2 hover:text-slate-800';
+							$consent_html    = sprintf(
+								/* translators: 1: product name (bold), 2: Terms of Service link, 3: Malware Scanning Terms link, 4: Privacy Policy link, 5: product name (bold), 6: partner name (bold). */
+								__( 'I agree to the %1$s %2$s and %3$s, and acknowledge the %4$s. Malware scanning is provided by %5$s in partnership with %6$s.', 'integrum-security-scanner' ),
 								'<strong>' . esc_html__( 'Limit Login Attempts Reloaded', 'integrum-security-scanner' ) . '</strong>',
-								'<button type="button" class="iss-terms-open cursor-pointer border-0 bg-transparent p-0 text-inherit underline decoration-dotted underline-offset-2 hover:text-slate-800">' . esc_html__( 'Terms of Service', 'integrum-security-scanner' ) . '</button>',
-								'<button type="button" class="iss-terms-open cursor-pointer border-0 bg-transparent p-0 text-inherit underline decoration-dotted underline-offset-2 hover:text-slate-800">' . esc_html__( 'Malware Scanning Terms', 'integrum-security-scanner' ) . '</button>',
-								'<button type="button" class="iss-terms-open cursor-pointer border-0 bg-transparent p-0 text-inherit underline decoration-dotted underline-offset-2 hover:text-slate-800">' . esc_html__( 'Privacy Policy', 'integrum-security-scanner' ) . '</button>',
+								'<button type="button" class="' . esc_attr( $terms_btn_class ) . '">' . esc_html__( 'Terms of Service', 'integrum-security-scanner' ) . '</button>',
+								'<button type="button" class="' . esc_attr( $terms_btn_class ) . '">' . esc_html__( 'Malware Scanning Terms', 'integrum-security-scanner' ) . '</button>',
+								'<button type="button" class="' . esc_attr( $terms_btn_class ) . '">' . esc_html__( 'Privacy Policy', 'integrum-security-scanner' ) . '</button>',
 								'<strong>' . esc_html__( 'Limit Login Attempts Reloaded', 'integrum-security-scanner' ) . '</strong>',
 								'<strong>' . esc_html__( 'Imunify by CloudLinux', 'integrum-security-scanner' ) . '</strong>'
+							);
+							echo wp_kses(
+								$consent_html,
+								array(
+									'strong' => array(),
+									'button' => array(
+										'type'  => array(),
+										'class' => array(),
+									),
+								)
 							);
 							?>
 						</span>

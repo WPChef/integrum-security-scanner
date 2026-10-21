@@ -67,7 +67,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 	<div class="border-t border-slate-200 px-6 py-4 text-sm leading-relaxed text-slate-600">
 		<p class="!m-0">
-			<a href="https://www.limitloginattempts.com/terms/" target="_blank" rel="noopener noreferrer" class="underline decoration-dotted underline-offset-2 hover:text-slate-800"><?php esc_html_e( 'Integrum Terms of Service', 'integrum-security-scanner' ); ?></a>
+			<a href="https://www.limitloginattempts.com/terms/" target="_blank" rel="noopener noreferrer" class="underline decoration-dotted underline-offset-2 hover:text-slate-800"><?php esc_html_e( 'Limit Login Attempts Reloaded Terms of Service', 'integrum-security-scanner' ); ?></a>
 			<?php esc_html_e( ' and ', 'integrum-security-scanner' ); ?>
 			<a href="https://www.limitloginattempts.com/privacy-policy/" target="_blank" rel="noopener noreferrer" class="underline decoration-dotted underline-offset-2 hover:text-slate-800"><?php esc_html_e( 'Privacy Policy', 'integrum-security-scanner' ); ?></a>
 			<span aria-hidden="true"> · </span>

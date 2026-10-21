@@ -29,7 +29,7 @@ export function initPreview( treeApi ) {
 	// connection flow: until a site key exists it never starts (on serial PHP
 	// workers it would otherwise block the registration request itself).
 	// '1'/'0' because wp_localize_script casts scalars to strings.
-	const connected = CFG.hasKey === '1' || CFG.hasKey === true;
+	const connected = CFG.hasKey === '1';
 
 	// Monotonic sequence: stale responses are dropped so a slow earlier
 	// request can never overwrite the tree of a newer one.
