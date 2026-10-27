@@ -63,6 +63,38 @@ if ( ! function_exists( '_n' ) ) {
 	}
 }
 
+// Array-backed option stubs for the option-backed models (ScanHistoryStorage).
+// Tests reset $GLOBALS['__llar_options'] in setUp().
+if ( ! function_exists( 'get_option' ) ) {
+	/**
+	 * Reads a value from the in-memory options table.
+	 *
+	 * @param string $name    Option name.
+	 * @param mixed  $default Default when missing.
+	 * @return mixed
+	 */
+	// phpcs:ignore Universal.NamingConventions.NoReservedKeywordParameterNames -- WP signature.
+	function get_option( string $name, $default = false ) {
+		return \array_key_exists( $name, $GLOBALS['__llar_options'] ?? array() ) ? $GLOBALS['__llar_options'][ $name ] : $default;
+	}
+}
+
+if ( ! function_exists( 'update_option' ) ) {
+	/**
+	 * Writes a value to the in-memory options table.
+	 *
+	 * @param string $name     Option name.
+	 * @param mixed  $value    Value.
+	 * @param bool   $autoload Autoload flag (unused).
+	 * @return bool
+	 */
+	// phpcs:ignore Universal.NamingConventions.NoReservedKeywordParameterNames, Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed -- WP signature.
+	function update_option( string $name, $value, $autoload = null ): bool {
+		$GLOBALS['__llar_options'][ $name ] = $value;
+		return true;
+	}
+}
+
 if ( ! defined( 'HOUR_IN_SECONDS' ) ) {
 	define( 'HOUR_IN_SECONDS', 3600 );
 }
