@@ -449,9 +449,10 @@ final class AdminController {
 			return;
 		}
 
-		$scanned = max( (int) ( $status['completed'] ?? 0 ), (int) ( $status['total'] ?? 0 ) );
+		$scanned  = max( (int) ( $status['completed'] ?? 0 ), (int) ( $status['total'] ?? 0 ) );
+		$findings = isset( $status['findings'] ) ? (int) $status['findings'] : null;
 
-		$this->history->record( $job_id, $results, null, $scanned > 0 ? $scanned : null );
+		$this->history->record( $job_id, $results, null, $scanned > 0 ? $scanned : null, $findings );
 	}
 
 	/**

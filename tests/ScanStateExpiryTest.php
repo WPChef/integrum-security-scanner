@@ -229,6 +229,78 @@ final class ScanStateExpiryTest extends TestCase {
 	}
 
 	/**
+	 * The completion counters must not be derived from the per-file list:
+	 * the real API trims files[] once the job completes (keeping only
+	 * notable entries) and may return it empty at the instant of
+	 * completion. The summary block is the authoritative source.
+	 */
+	public function test_findings_come_from_the_scanner_summary_block(): void {
+		$http = new MockHttpClient();
+		$http->add_scenario(
+			'GET',
+			'https://scanner.test/api/v1/jobs/job-sum/results',
+			200,
+			array(
+				'status'          => 'completed',
+				'is_complete'     => true,
+				'total_files'     => 5000,
+				'completed_files' => 5000,
+				'files'           => array(),
+				'summary'         => array(
+					'has_verdict' => 5000,
+					'clean'       => 4991,
+					'malicious'   => 7,
+					'suspicious'  => 2,
+					'unknown'     => 0,
+				),
+			)
+		);
+
+		$status = $this->make_scanner( $http, new SpyLogger(), 'https://scanner.test' )->get_status( 'job-sum' );
+
+		$this->assertSame( 'completed', $status['status'] );
+		$this->assertSame( 5000, $status['completed'] );
+		$this->assertSame( 9, $status['findings'], 'malicious + suspicious + unknown from the summary block' );
+	}
+
+	/**
+	 * Without a summary block the findings fall back to counting non-clean
+	 * verdicts in the per-file list.
+	 */
+	public function test_findings_fall_back_to_verdict_rows_without_summary(): void {
+		$http = new MockHttpClient();
+		$http->add_scenario(
+			'GET',
+			'https://scanner.test/api/v1/jobs/job-rows/results',
+			200,
+			array(
+				'status'          => 'completed',
+				'is_complete'     => true,
+				'total_files'     => 2,
+				'completed_files' => 2,
+				'files'           => array(
+					array(
+						'file_id'    => 'a',
+						'file_index' => 0,
+						'action'     => 'has_verdict',
+						'verdict'    => 'clean',
+					),
+					array(
+						'file_id'    => 'b',
+						'file_index' => 1,
+						'action'     => 'has_verdict',
+						'verdict'    => 'malicious',
+					),
+				),
+			)
+		);
+
+		$status = $this->make_scanner( $http, new SpyLogger(), 'https://scanner.test' )->get_status( 'job-rows' );
+
+		$this->assertSame( 1, $status['findings'] );
+	}
+
+	/**
 	 * Builds a scanner wired with the production job store and collector.
 	 *
 	 * @param MockHttpClient $http   HTTP mock.

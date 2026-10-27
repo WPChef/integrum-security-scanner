@@ -180,7 +180,7 @@ export function initPolling( jobId ) {
 		}
 		hideScanNotice( statusSection );
 		loadResults( jobId ).then( function ( rows ) {
-			showSummary( statusSection, status, rows );
+			showSummary( statusSection, status, rows, completed || total, payload.data.findings );
 			// The history table at the bottom gains a row for this run without a
 			// page reload (the server archived it when completion was observed).
 			refreshHistory();
@@ -216,8 +216,10 @@ export function initPolling( jobId ) {
 	 * @param {Element} statusSection Progress section.
 	 * @param {string}  status       Final job status ('completed' or 'failed').
 	 * @param {Array<{file_path: string, status: string}>} rows Result rows.
+	 * @param {number}  scanned      Files scanned, from the status counters.
+	 * @param {number|undefined} findings Non-clean count from the scanner summary.
 	 */
-	function showSummary( statusSection, status, rows ) {
+	function showSummary( statusSection, status, rows, scanned, findings ) {
 		const summary = statusSection.parentElement
 			? statusSection.parentElement.querySelector( '.iss-scan-summary' )
 			: null;
@@ -232,11 +234,17 @@ export function initPolling( jobId ) {
 			text = i18n.scanFailed || 'Scan failed.';
 			skin = 'iss-scan-summary--failed';
 		} else {
-			const suspicious = rows.filter( function ( row ) {
-				return row.status && 'clean' !== row.status;
-			} ).length;
+			// rows alone are unreliable at completion: the scanner trims the
+			// per-file list once the job is done and may return it empty at
+			// the instant of completion, so the counts come from the status
+			// payload (status counters + scanner summary).
+			const suspicious = 'number' === typeof findings
+				? findings
+				: rows.filter( function ( row ) {
+					return row.status && 'clean' !== row.status;
+				} ).length;
 			text = ( i18n.scanCompleted || 'Scan completed: {scanned} files scanned, {suspicious} suspicious.' )
-				.replace( '{scanned}', String( rows.length ) )
+				.replace( '{scanned}', String( scanned || rows.length ) )
 				.replace( '{suspicious}', String( suspicious ) );
 			skin = suspicious > 0 ? 'iss-scan-summary--findings' : 'iss-scan-summary--clean';
 		}

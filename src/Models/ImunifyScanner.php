@@ -303,6 +303,7 @@ final class ImunifyScanner implements \Integrum\SecurityScanner\Contracts\Scanne
 			'current_file'  => $current_file,
 			'completed'     => $completed,
 			'total'         => $total_files,
+			'findings'      => $this->count_findings( $body ),
 			'total_bytes'   => $total_bytes,
 			'scanned_bytes' => $scanned_bytes,
 			'started_at'    => (int) ( $map['started_at'] ?? 0 ),
@@ -367,6 +368,40 @@ final class ImunifyScanner implements \Integrum\SecurityScanner\Contracts\Scanne
 	 */
 	private function fetch_results( string $job_id, string $key ): array {
 		return $this->call( 'GET', '/jobs/' . rawurlencode( $job_id ) . '/results', $key );
+	}
+
+	/**
+	 * Counts files that are anything but clean.
+	 *
+	 * The scanner trims the per-file list once the job completes (it only
+	 * keeps notable entries) and may even return it empty at the instant of
+	 * completion, so counting rows loses findings. The summary block is the
+	 * authoritative source; the per-file verdicts are the fallback for
+	 * responses without one (older payloads, test mocks).
+	 *
+	 * @param array<string, mixed> $body Last /results body.
+	 */
+	private function count_findings( array $body ): int {
+		$summary = $body['summary'] ?? null;
+		if ( is_array( $summary ) ) {
+			$count = 0;
+			foreach ( array( 'malicious', 'suspicious', 'unknown' ) as $key ) {
+				$count += (int) ( $summary[ $key ] ?? 0 );
+			}
+			return $count;
+		}
+
+		$count = 0;
+		foreach ( (array) ( $body['files'] ?? array() ) as $row ) {
+			if ( ! is_array( $row ) || 'has_verdict' !== (string) ( $row['action'] ?? '' ) ) {
+				continue;
+			}
+			$verdict = (string) ( $row['verdict'] ?? '' );
+			if ( '' !== $verdict && 'clean' !== $verdict ) {
+				++$count;
+			}
+		}
+		return $count;
 	}
 
 	/**
