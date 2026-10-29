@@ -3,7 +3,7 @@ Contributors: wpchefgadget, nikitaglobal
 Tags: security, malware, scanner, antivirus, files
 Requires at least: 6.0
 Tested up to: 7.1
-Stable tag: 0.1.0
+Stable tag: 0.1.1
 Requires PHP: 8.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -69,6 +69,9 @@ Scanning is powered by Imunify by CloudLinux through the Limit Login Attempts Re
 WordPress 6.0 or later and PHP 8.1 or later.
 
 == Changelog ==
+
+= 0.1.1 =
+* Improved site registration flow, API error handling, consent text, and sensitive response logging.
 
 = 0.1.0 =
 * Initial release: file selection tree, include/exclude masks, live scan progress, and per-folder results with severity.

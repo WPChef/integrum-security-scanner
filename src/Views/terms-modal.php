@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 >
 	<div class="flex items-start justify-between gap-4 border-b border-slate-200 px-6 py-4">
 		<h3 id="iss-terms-dialog-title" class="!m-0 !text-base !font-semibold !leading-snug !text-slate-800">
-			<?php esc_html_e( 'Integrum Terms of Service and Malware Scanning Terms', 'integrum-security-scanner' ); ?>
+			<?php esc_html_e( 'Limit Login Attempts Reloaded Terms of Service and Malware Scanning Terms', 'integrum-security-scanner' ); ?>
 		</h3>
 		<button
 			type="button"
@@ -33,7 +33,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 		<p><?php
 		printf(
 			wp_kses(
-				/* translators: 1: Integrum provider, 2: Imunify partner. */
+				/* translators: 1: provider, 2: Imunify partner. */
 				__( 'The malware scanning service is provided by %1$s in partnership with %2$s', 'integrum-security-scanner' ),
 				array( 'strong' => array() )
 			),
@@ -67,7 +67,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 	<div class="border-t border-slate-200 px-6 py-4 text-sm leading-relaxed text-slate-600">
 		<p class="!m-0">
-			<a href="https://www.limitloginattempts.com/terms/" target="_blank" rel="noopener noreferrer" class="underline decoration-dotted underline-offset-2 hover:text-slate-800"><?php esc_html_e( 'Integrum Terms of Service', 'integrum-security-scanner' ); ?></a>
+			<a href="https://www.limitloginattempts.com/terms/" target="_blank" rel="noopener noreferrer" class="underline decoration-dotted underline-offset-2 hover:text-slate-800"><?php esc_html_e( 'Limit Login Attempts Reloaded Terms of Service', 'integrum-security-scanner' ); ?></a>
 			<?php esc_html_e( ' and ', 'integrum-security-scanner' ); ?>
 			<a href="https://www.limitloginattempts.com/privacy-policy/" target="_blank" rel="noopener noreferrer" class="underline decoration-dotted underline-offset-2 hover:text-slate-800"><?php esc_html_e( 'Privacy Policy', 'integrum-security-scanner' ); ?></a>
 			<span aria-hidden="true"> · </span>

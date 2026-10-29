@@ -136,6 +136,12 @@ final class AdminController {
 			array(
 				'ajaxUrl' => admin_url( 'admin-ajax.php' ),
 				'nonce'   => wp_create_nonce( self::NONCE_POLL ),
+				// Whether a site key exists ('1'/'0' — wp_localize_script casts
+				// scalars to strings). The files-to-scan preview is a filesystem
+				// walk that can run long; it must not start before the site is
+				// registered, or it competes with (and on serial PHP workers
+				// blocks) the registration request.
+				'hasKey'  => $this->storage->get_site_key() ? '1' : '0',
 				'i18n'    => array(
 					'error'          => __( 'Scan failed. Please try again.', 'integrum-security-scanner' ),
 					'saveKey'        => __( 'Save key', 'integrum-security-scanner' ),
@@ -215,6 +221,7 @@ final class AdminController {
 		check_admin_referer( self::NONCE_GET_KEY );
 
 		$manual_key = isset( $_POST['integrum_security_scanner_key'] ) ? sanitize_text_field( wp_unslash( $_POST['integrum_security_scanner_key'] ) ) : '';
+		$email      = isset( $_POST['integrum_security_scanner_email'] ) ? sanitize_email( wp_unslash( $_POST['integrum_security_scanner_email'] ) ) : '';
 
 		// When user provides a key manually, store it directly without API call.
 		if ( '' !== $manual_key ) {
@@ -226,6 +233,7 @@ final class AdminController {
 					'type'    => 'success',
 					'message' => __( 'Site key saved.', 'integrum-security-scanner' ),
 					'scope'   => 'connection',
+					'email'   => $email,
 				)
 			);
 			return;
@@ -238,16 +246,17 @@ final class AdminController {
 					'type'    => 'error',
 					'message' => __( 'You must agree to the Terms of Service and Malware Scanning Terms before registering.', 'integrum-security-scanner' ),
 					'scope'   => 'connection',
+					'email'   => $email,
 				)
 			);
 			return;
 		}
 
 		$domain = (string) apply_filters( 'integrum_security_scanner_site_domain', '' );
-		$email  = isset( $_POST['integrum_security_scanner_email'] ) ? sanitize_email( wp_unslash( $_POST['integrum_security_scanner_email'] ) ) : '';
 
 		$notice          = $this->licensing->register( (string) $domain, $email );
 		$notice['scope'] = 'connection';
+		$notice['email'] = $email;
 		$this->redirect( $notice );
 	}
 
@@ -589,6 +598,13 @@ final class AdminController {
 
 		// Finished runs for the history table at the bottom of the page.
 		$history_rows = $this->history_rows();
+
+		// Email prefill: the value submitted with the last connection-form
+		// POST (success or error) wins, so a rejected registration shows what
+		// the user typed instead of snapping back to the profile email.
+		$email_value = ( null !== $notice && '' !== ( $notice['email'] ?? '' ) )
+			? $notice['email']
+			: wp_get_current_user()->user_email;
 
 		require INTEGRUM_SECURITY_SCANNER_DIR . 'src/Views/page.php';
 	}
@@ -1092,7 +1108,7 @@ final class AdminController {
 	 * that triggered it, so e.g. a scan-start error lands near the scan form,
 	 * not under the connection form.
 	 *
-	 * @return array{type: string, message: string, scope: string}|null Notice data or null when none pending.
+	 * @return array{type: string, message: string, scope: string, email: string}|null Notice data or null when none pending.
 	 */
 	private function consume_notice(): ?array {
 		$notice = get_transient( 'integrum_security_scanner_notice' );
@@ -1120,10 +1136,16 @@ final class AdminController {
 		);
 		$scope          = isset( $notice['scope'], $allowed_scopes[ $notice['scope'] ] ) ? $notice['scope'] : 'connection';
 
+		// The email typed into the connection form rides along with the notice
+		// so the field keeps the submitted value after the PRG redirect
+		// instead of reverting to the WP profile email.
+		$email = isset( $notice['email'] ) && is_string( $notice['email'] ) ? $notice['email'] : '';
+
 		return array(
 			'type'    => $type,
 			'message' => $message,
 			'scope'   => $scope,
+			'email'   => $email,
 		);
 	}
 }
