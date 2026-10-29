@@ -3,7 +3,7 @@
  * Plugin Name:       Integrum Security Scanner
  * Plugin URI:        https://www.limitloginattempts.com/
  * Description:       Scan your WordPress files for malicious code, right from the dashboard.
- * Version:           0.1.0
+ * Version:           0.1.1
  * Requires at least: 6.0
  * Requires PHP:      8.1
  * Author:            Limit Login Attempts Reloaded
@@ -17,7 +17,7 @@ declare( strict_types = 1 );
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'INTEGRUM_SECURITY_SCANNER_VERSION', '0.1.0' );
+define( 'INTEGRUM_SECURITY_SCANNER_VERSION', '0.1.1' );
 define( 'INTEGRUM_SECURITY_SCANNER_DIR', plugin_dir_path( __FILE__ ) );
 define( 'INTEGRUM_SECURITY_SCANNER_URL', plugin_dir_url( __FILE__ ) );
 
