@@ -51,7 +51,7 @@ final class ScanHistoryStorage {
 	 *                       Non-positive values fall back to counting rows.
 	 * @return array<string, mixed>|null The stored record, or the previously stored one for a duplicate job.
 	 */
-	public function record( string $job_id, array $results, ?int $finished_at = null, ?int $scanned_total = null ): ?array {
+	public function record( string $job_id, array $results, ?int $finished_at = null, ?int $scanned_total = null, ?int $problems_total = null ): ?array {
 		$runs = $this->all();
 
 		foreach ( $runs as $run ) {
@@ -90,7 +90,7 @@ final class ScanHistoryStorage {
 			'job_id'      => $job_id,
 			'finished_at' => $finished_at ?? time(),
 			'scanned'     => $scanned_total > 0 ? $scanned_total : $scanned,
-			'problems'    => $problems,
+			'problems'    => $problems_total > 0 ? $problems_total : $problems,
 			'files'       => $files,
 		);
 

@@ -12,6 +12,12 @@ import { refreshHistory } from './history.js';
 
 const STATUS_INTERVAL_MS = 4000;
 const STATUSES_DONE = [ 'completed', 'done', 'failed' ];
+const MAX_RETRY_DELAY_MS = 30000;
+// Give up after this many consecutive transport-level failures (network
+// error, 5xx, malformed response). The PHP side escalates a failing job on
+// its own; this cap only stops the client from retrying forever when the
+// server is unreachable.
+const MAX_CONSECUTIVE_ERRORS = 5;
 
 /**
  * Estimates remaining seconds from the scanned-bytes rate over the sample
@@ -65,12 +71,44 @@ export function initPolling( jobId ) {
 	// history, so a temporary slowdown does not distort the estimate forever.
 	let samples = [];
 
+	// Consecutive transport-level poll failures (network / 5xx / bad JSON).
+	// A single hiccup must not kill the poller — the scan would look frozen
+	// while the job keeps running server-side.
+	let consecutiveErrors = 0;
+
 	function pollStatus() {
 		fetchJSON( 'integrum_security_scanner_status', { job_id: jobId } )
-			.then( onStatus )
+			.then( function ( payload ) {
+				consecutiveErrors = 0;
+				onStatus( payload );
+			} )
 			.catch( function () {
-				progressLabel.textContent = CFG.i18n ? CFG.i18n.error : 'error';
+				handlePollFailure();
 			} );
+	}
+
+	/**
+	 * Retries a failed status poll with exponential backoff instead of
+	 * abandoning the scan UI. Stops after MAX_CONSECUTIVE_ERRORS so an
+	 * unreachable server does not produce an endless retry loop.
+	 */
+	function handlePollFailure() {
+		if ( window.__llarStopped ) {
+			return; // Stop requested via the Stop button.
+		}
+
+		++consecutiveErrors;
+
+		if ( consecutiveErrors >= MAX_CONSECUTIVE_ERRORS ) {
+			// The job keeps running server-side — do not claim it failed.
+			progressLabel.textContent = ( CFG.i18n && CFG.i18n.connectionLost )
+				|| 'Connection lost. Reload the page to resume monitoring.';
+			return;
+		}
+
+		progressLabel.textContent = ( CFG.i18n && CFG.i18n.retrying ) || 'Connection lost, retrying…';
+		const delay = Math.min( STATUS_INTERVAL_MS * Math.pow( 2, consecutiveErrors ), MAX_RETRY_DELAY_MS );
+		window.setTimeout( pollStatus, delay );
 	}
 
 	function onStatus( payload ) {
@@ -141,8 +179,8 @@ export function initPolling( jobId ) {
 			startBtn.disabled = false;
 		}
 		hideScanNotice( statusSection );
-		loadResults( jobId ).then( function ( rows ) {
-			showSummary( statusSection, status, rows );
+		loadResults( jobId ).then( function ( res ) {
+			showSummary( statusSection, status, res.rows, completed || total, payload.data.findings, payload.data.summary, res.failed );
 			// The history table at the bottom gains a row for this run without a
 			// page reload (the server archived it when completion was observed).
 			refreshHistory();
@@ -178,34 +216,104 @@ export function initPolling( jobId ) {
 	 * @param {Element} statusSection Progress section.
 	 * @param {string}  status       Final job status ('completed' or 'failed').
 	 * @param {Array<{file_path: string, status: string}>} rows Result rows.
+	 * @param {number}  scanned      Files scanned, from the status counters.
+	 * @param {number|undefined} findings Non-clean count from the scanner summary.
+	 * @param {Object|undefined} summary  Per-verdict counters from the scanner.
+	 * @param {boolean} failed          The results request itself failed (distinct
+	 *                                  from a legitimately empty row list).
 	 */
-	function showSummary( statusSection, status, rows ) {
-		const summary = statusSection.parentElement
+	function showSummary( statusSection, status, rows, scanned, findings, summary, failed ) {
+		const summaryEl = statusSection.parentElement
 			? statusSection.parentElement.querySelector( '.iss-scan-summary' )
 			: null;
-		if ( ! summary ) {
+		if ( ! summaryEl ) {
 			return;
 		}
 
 		const i18n = CFG.i18n || {};
 		let text;
 		let skin;
+		let note = '';
 		if ( 'failed' === status ) {
 			text = i18n.scanFailed || 'Scan failed.';
 			skin = 'iss-scan-summary--failed';
 		} else {
-			const suspicious = rows.filter( function ( row ) {
-				return row.status && 'clean' !== row.status;
-			} ).length;
-			text = ( i18n.scanCompleted || 'Scan completed: {scanned} files scanned, {suspicious} suspicious.' )
-				.replace( '{scanned}', String( rows.length ) )
-				.replace( '{suspicious}', String( suspicious ) );
-			skin = suspicious > 0 ? 'iss-scan-summary--findings' : 'iss-scan-summary--clean';
+			// rows alone are unreliable at completion: the scanner trims the
+			// per-file list once the job is done and may return it empty at
+			// the instant of completion, so the counts come from the status
+			// payload (status counters + scanner summary).
+			const suspicious = 'number' === typeof findings
+				? findings
+				: rows.filter( function ( row ) {
+					return row.status && 'clean' !== row.status;
+				} ).length;
+			const total = scanned || rows.length;
+
+			if ( suspicious > 0 ) {
+				const breakdown = verdictBreakdown( summary, i18n );
+				text = ( i18n.scanCompletedFindings || 'Scan completed: {scanned} files scanned — {threats} threats found ({breakdown}).' )
+					.replace( '{scanned}', String( total ) )
+					.replace( '{threats}', String( suspicious ) )
+					.replace( '{breakdown}', breakdown );
+				skin = 'iss-scan-summary--findings';
+
+				// Findings without rows have two distinct causes. The scanner
+				// may trim the per-file list once a job completes (final for
+				// this run — a re-scan would burn quota), or the results
+				// request itself may have failed (retryable: the scanner
+				// still holds the data, and the history below keeps the
+				// files recorded during the status poll). Say which one.
+				if ( rows.length === 0 ) {
+					note = failed
+						? ( i18n.scanFindingsListError
+							|| 'Could not load the file list. Reload the page to try again, or check the scan history below — the files found are kept there.' )
+						: ( i18n.scanFindingsNoList
+							|| 'The scanner did not return the per-file list, so the files themselves are not shown. Run the scan again to list them.' );
+				}
+			} else {
+				text = ( i18n.scanCompletedClean || 'Scan completed: {scanned} files scanned — no threats found.' )
+					.replace( '{scanned}', String( total ) );
+				skin = 'iss-scan-summary--clean';
+			}
 		}
 
-		summary.textContent = text;
-		summary.className = 'iss-scan-summary mb-4 rounded-lg border px-4 py-3 text-sm ' + skin;
-		summary.hidden = false;
+		summaryEl.textContent = text;
+		summaryEl.className = 'iss-scan-summary mb-4 rounded-lg border px-4 py-3 text-sm ' + skin;
+		summaryEl.hidden = false;
+
+		if ( '' !== note ) {
+			const noteEl = document.createElement( 'p' );
+			noteEl.className = 'mt-1 text-xs opacity-75';
+			noteEl.textContent = note;
+			summaryEl.appendChild( noteEl );
+		}
+	}
+
+	/**
+	 * Builds the "N malicious, N suspicious" part of the completion summary
+	 * from the scanner's per-verdict counters, skipping zero categories.
+	 *
+	 * @param {Object|undefined} summary Per-verdict counters.
+	 * @param {Object}           i18n    Translated labels.
+	 * @return {string}
+	 */
+	function verdictBreakdown( summary, i18n ) {
+		if ( ! summary ) {
+			return '';
+		}
+		const labels = {
+			malicious: i18n.verdictMalicious || 'malicious',
+			suspicious: i18n.verdictSuspicious || 'suspicious',
+			unknown: i18n.verdictUnknown || 'unknown',
+		};
+		const parts = [];
+		Object.keys( labels ).forEach( function ( key ) {
+			const count = Number( summary[ key ] ) || 0;
+			if ( count > 0 ) {
+				parts.push( count + ' ' + labels[ key ] );
+			}
+		} );
+		return parts.join( ', ' );
 	}
 
 	pollStatus();

@@ -14,6 +14,7 @@ use Integrum\SecurityScanner\Contracts\FileCollectorInterface;
 use Integrum\SecurityScanner\Contracts\LoggerInterface;
 use Integrum\SecurityScanner\Contracts\ScanException;
 use Integrum\SecurityScanner\Contracts\ScannerInterface;
+use Integrum\SecurityScanner\Models\ActiveJob;
 use Integrum\SecurityScanner\Models\ScanHistoryStorage;
 use Integrum\SecurityScanner\Models\ScanResult;
 use Integrum\SecurityScanner\Services\LicensingService;
@@ -47,6 +48,7 @@ final class AdminController {
 	 * @param LoggerInterface            $logger   Logger.
 	 * @param FileCollectorInterface     $file_collector Candidate file list builder (scan preview).
 	 * @param ScanHistoryStorage|null    $history  Finished-run history (defaults to a new store).
+	 * @param ActiveJob|null             $active_job Active-job pointer (defaults to new).
 	 */
 	public function __construct(
 		private ScannerInterface $scanner,
@@ -54,9 +56,11 @@ final class AdminController {
 		private LicensingService $licensing,
 		private LoggerInterface $logger,
 		private FileCollectorInterface $file_collector,
-		private ?ScanHistoryStorage $history = null
+		private ?ScanHistoryStorage $history = null,
+		private ?ActiveJob $active_job = null
 	) {
-		$this->history = $this->history ?? new ScanHistoryStorage();
+		$this->history    = $this->history ?? new ScanHistoryStorage();
+		$this->active_job = $this->active_job ?? new ActiveJob();
 	}
 
 	/**
@@ -143,37 +147,46 @@ final class AdminController {
 				// blocks) the registration request.
 				'hasKey'  => $this->storage->get_site_key() ? '1' : '0',
 				'i18n'    => array(
-					'error'          => __( 'Scan failed. Please try again.', 'integrum-security-scanner' ),
-					'saveKey'        => __( 'Save key', 'integrum-security-scanner' ),
-					'register'       => __( 'Register', 'integrum-security-scanner' ),
-					'showKey'        => __( 'Show site key', 'integrum-security-scanner' ),
-					'hideKey'        => __( 'Hide site key', 'integrum-security-scanner' ),
-					'stopped'        => __( 'Scan stopped.', 'integrum-security-scanner' ),
-					'stopping'       => __( 'Stopping…', 'integrum-security-scanner' ),
-					'file'           => __( 'file', 'integrum-security-scanner' ),
-					'files'          => __( 'files', 'integrum-security-scanner' ),
-					'scanCompleted'  => __( 'Scan completed: {scanned} files scanned, {suspicious} suspicious.', 'integrum-security-scanner' ),
-					'scanFailed'     => __( 'Scan failed.', 'integrum-security-scanner' ),
-					'historyLoading' => __( 'Loading…', 'integrum-security-scanner' ),
-					'historyClean'   => __( 'No problem files in this scan.', 'integrum-security-scanner' ),
-					'statusLabels'   => array(
+					'connectionLost'        => __( 'Connection lost. Reload the page to resume monitoring.', 'integrum-security-scanner' ),
+					'error'                 => __( 'Scan failed. Please try again.', 'integrum-security-scanner' ),
+					'retrying'              => __( 'Connection lost, retrying…', 'integrum-security-scanner' ),
+					'saveKey'               => __( 'Save key', 'integrum-security-scanner' ),
+					'register'              => __( 'Register', 'integrum-security-scanner' ),
+					'showKey'               => __( 'Show site key', 'integrum-security-scanner' ),
+					'hideKey'               => __( 'Hide site key', 'integrum-security-scanner' ),
+					'stopped'               => __( 'Scan stopped.', 'integrum-security-scanner' ),
+					'stopping'              => __( 'Stopping…', 'integrum-security-scanner' ),
+					'file'                  => __( 'file', 'integrum-security-scanner' ),
+					'files'                 => __( 'files', 'integrum-security-scanner' ),
+					'scanCompleted'         => __( 'Scan completed: {scanned} files scanned, {suspicious} suspicious.', 'integrum-security-scanner' ),
+					'scanCompletedClean'    => __( 'Scan completed: {scanned} files scanned — no threats found.', 'integrum-security-scanner' ),
+					'scanCompletedFindings' => __( 'Scan completed: {scanned} files scanned — {threats} threats found ({breakdown}).', 'integrum-security-scanner' ),
+					'scanFindingsNoList'    => __( 'The scanner did not return the per-file list, so the files themselves are not shown. Run the scan again to list them.', 'integrum-security-scanner' ),
+					'scanFindingsListError' => __( 'Could not load the file list. Reload the page to try again, or check the scan history below — the files found are kept there.', 'integrum-security-scanner' ),
+					'verdictMalicious'      => __( 'malicious', 'integrum-security-scanner' ),
+					'verdictSuspicious'     => __( 'suspicious', 'integrum-security-scanner' ),
+					'verdictUnknown'        => __( 'unknown', 'integrum-security-scanner' ),
+					'scanFailed'            => __( 'Scan failed.', 'integrum-security-scanner' ),
+					'historyLoading'        => __( 'Loading…', 'integrum-security-scanner' ),
+					'historyClean'          => __( 'No problem files in this scan.', 'integrum-security-scanner' ),
+					'statusLabels'          => array(
 						'infected'   => __( 'infected', 'integrum-security-scanner' ),
 						'suspicious' => __( 'suspicious', 'integrum-security-scanner' ),
 						'error'      => __( 'error', 'integrum-security-scanner' ),
 					),
-					'statusHints'    => array(
+					'statusHints'           => array(
 						'infected'   => __( 'Malicious code detected. Back up your site, then replace this file with a clean copy from the original source and check other recently modified files.', 'integrum-security-scanner' ),
 						'suspicious' => __( 'Potentially dangerous code detected. Review the file content before deleting anything — obfuscated code can be a false positive.', 'integrum-security-scanner' ),
 						'error'      => __( 'The file could not be scanned. Check the server logs and scan again, or review the file manually.', 'integrum-security-scanner' ),
 					),
-					'severity'       => array(
+					'severity'              => array(
 						'critical' => __( 'critical', 'integrum-security-scanner' ),
 						'high'     => __( 'high', 'integrum-security-scanner' ),
 						'medium'   => __( 'medium', 'integrum-security-scanner' ),
 						'low'      => __( 'low', 'integrum-security-scanner' ),
 						'info'     => __( 'info', 'integrum-security-scanner' ),
 					),
-					'severityHints'  => array(
+					'severityHints'         => array(
 						'critical' => __( 'Critical: the file almost certainly contains malware. Replace it with a clean copy immediately.', 'integrum-security-scanner' ),
 						'high'     => __( 'High: likely malware. Replace the file with a clean copy from a trusted source.', 'integrum-security-scanner' ),
 						'medium'   => __( 'Medium: suspicious code constructs found. Review the file and clean it up if needed.', 'integrum-security-scanner' ),
@@ -331,7 +344,7 @@ final class AdminController {
 			return;
 		}
 
-		set_transient( 'integrum_security_scanner_active_job', $job_id, HOUR_IN_SECONDS );
+		$this->active_job->start( $job_id );
 		// One-shot marker consumed by render() on the FIRST page load after the
 		// PRG redirect. It is NOT a persistent "scan in progress" flag: once
 		// consumed, a page reload no longer surfaces a running scan, so the UI
@@ -357,12 +370,7 @@ final class AdminController {
 			wp_send_json_error( array( 'message' => 'forbidden' ), 403 );
 		}
 
-		$job_id = '';
-		if ( isset( $_POST['job_id'] ) ) {
-			$job_id = sanitize_text_field( wp_unslash( $_POST['job_id'] ) );
-		} elseif ( get_transient( 'integrum_security_scanner_active_job' ) ) {
-			$job_id = (string) get_transient( 'integrum_security_scanner_active_job' );
-		}
+		$job_id = $this->resolve_job_id();
 
 		if ( '' === $job_id ) {
 			wp_send_json_error( array( 'message' => 'no job' ) );
@@ -375,7 +383,7 @@ final class AdminController {
 		}
 
 		if ( in_array( $status['status'], array( 'completed', 'done', 'failed' ), true ) ) {
-			delete_transient( 'integrum_security_scanner_active_job' );
+			$this->active_job->clear();
 
 			// Archive the run once, at the moment completion is first observed.
 			// Failed scans are not archived: an empty "0 problems" row would read
@@ -384,6 +392,12 @@ final class AdminController {
 			if ( in_array( $status['status'], array( 'completed', 'done' ), true ) ) {
 				$this->record_history( $job_id, $status );
 			}
+		} else {
+			// Keep the job pointer alive while the page keeps polling: long
+			// scans outlive the 1-hour transient TTL, and losing the job id
+			// here would orphan a still-running scan. touch() rate-limits the
+			// write so the options table is not touched on every 4s poll.
+			$this->active_job->touch( $job_id );
 		}
 
 		wp_send_json_success( $status );
@@ -404,7 +418,7 @@ final class AdminController {
 			wp_send_json_error( array( 'message' => 'forbidden' ), 403 );
 		}
 
-		delete_transient( 'integrum_security_scanner_active_job' );
+		$this->active_job->clear();
 
 		wp_send_json_success( array( 'status' => 'stopped' ) );
 	}
@@ -442,9 +456,10 @@ final class AdminController {
 			return;
 		}
 
-		$scanned = max( (int) ( $status['completed'] ?? 0 ), (int) ( $status['total'] ?? 0 ) );
+		$scanned  = max( (int) ( $status['completed'] ?? 0 ), (int) ( $status['total'] ?? 0 ) );
+		$findings = isset( $status['findings'] ) ? (int) $status['findings'] : null;
 
-		$this->history->record( $job_id, $results, null, $scanned > 0 ? $scanned : null );
+		$this->history->record( $job_id, $results, null, $scanned > 0 ? $scanned : null, $findings );
 	}
 
 	/**
@@ -486,14 +501,7 @@ final class AdminController {
 			wp_send_json_error( array( 'message' => 'forbidden' ), 403 );
 		}
 
-		// TODO(dry): this job_id resolution block is duplicated in ajax_status();
-		// extract a private resolve_job_id() helper returning `?string`.
-		$job_id = '';
-		if ( isset( $_POST['job_id'] ) ) {
-			$job_id = sanitize_text_field( wp_unslash( $_POST['job_id'] ) );
-		} elseif ( get_transient( 'integrum_security_scanner_active_job' ) ) {
-			$job_id = (string) get_transient( 'integrum_security_scanner_active_job' );
-		}
+		$job_id = $this->resolve_job_id();
 
 		if ( '' === $job_id ) {
 			wp_send_json_error( array( 'message' => 'no job' ) );
@@ -506,6 +514,39 @@ final class AdminController {
 		}
 
 		wp_send_json_success( array( 'results' => $this->serialize_results( $results ) ) );
+	}
+
+	/**
+	 * Resolves the job id from the request, falling back to the active job.
+	 *
+	 * The POST value is validated by sanitize_job_id() because job ids become
+	 * part of transient names.
+	 *
+	 * @return string Job id, or an empty string when there is none.
+	 */
+	private function resolve_job_id(): string {
+		// phpcs:disable WordPress.Security.NonceVerification.Missing -- both callers verify the AJAX nonce first.
+		if ( isset( $_POST['job_id'] ) ) {
+			return $this->sanitize_job_id( sanitize_text_field( wp_unslash( $_POST['job_id'] ) ) );
+		}
+		// phpcs:enable WordPress.Security.NonceVerification.Missing
+
+		return $this->active_job->get();
+	}
+
+	/**
+	 * Validates a job id received from the browser.
+	 *
+	 * The id ends up in transient option names, which are limited to 191
+	 * characters, so an unexpected format is rejected instead of truncated.
+	 * The allowed set covers UUID/ULID-style ids while blocking whitespace,
+	 * control characters and path separators.
+	 *
+	 * @param string $job_id Raw job id.
+	 * @return string Valid id, or an empty string when rejected.
+	 */
+	private function sanitize_job_id( string $job_id ): string {
+		return 1 === preg_match( '/^[A-Za-z0-9._:-]{1,96}$/', $job_id ) ? $job_id : '';
 	}
 
 	/**
@@ -805,7 +846,7 @@ final class AdminController {
 	/**
 	 * Lists immediate child directories, including dot-prefixed ones.
 	 *
-	 * glob() skips hidden entries on Unix; scandir() does not.
+	 * Glob() skips hidden entries on Unix; scandir() does not.
 	 *
 	 * @param string $abs Absolute directory path.
 	 * @return string[] Absolute child directory paths.
