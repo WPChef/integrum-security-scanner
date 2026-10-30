@@ -1,6 +1,6 @@
 (() => {
   // assets/js/src/config.js
-  var CFG = window.llarSecurityScanner || {};
+  const CFG = window.llarSecurityScanner || {};
 
   // assets/js/src/keyForm.js
   function initKeyForm() {
@@ -129,11 +129,11 @@
   }
 
   // assets/js/src/dirTree.js
-  var dirTreeEl = document.querySelector(".iss-dirtree");
-  var treeFlags = {};
-  var dirTreeLocked = false;
-  var registerRowRef = null;
-  var syncAllRef = null;
+  const dirTreeEl = document.querySelector(".iss-dirtree");
+  let treeFlags = {};
+  let dirTreeLocked = false;
+  let registerRowRef = null;
+  let syncAllRef = null;
   if (dirTreeEl) {
     try {
       treeFlags = JSON.parse(dirTreeEl.getAttribute("data-flags") || "{}") || {};
@@ -560,9 +560,9 @@
   }
 
   // assets/js/src/results.js
-  var treeEl = document.querySelector(".iss-dirtree");
-  var filterWrap = document.getElementById("iss-only-suspicious-wrap");
-  var onlySuspicious = document.getElementById("iss-only-suspicious");
+  const treeEl = document.querySelector(".iss-dirtree");
+  const filterWrap = document.getElementById("iss-only-suspicious-wrap");
+  const onlySuspicious = document.getElementById("iss-only-suspicious");
   function loadResults(jobId) {
     return fetchJSON("integrum_security_scanner_results", { job_id: jobId }).then(function(payload) {
       const rows = payload && payload.data && payload.data.results || [];
@@ -840,10 +840,10 @@
   }
 
   // assets/js/src/history.js
-  var bodyEl = document.querySelector(".iss-history__body");
-  var emptyEl = document.querySelector(".iss-history__empty");
-  var runsCache = null;
-  var fetchPromise = null;
+  const bodyEl = document.querySelector(".iss-history__body");
+  const emptyEl = document.querySelector(".iss-history__empty");
+  let runsCache = null;
+  let fetchPromise = null;
   function fetchRuns() {
     if (runsCache) {
       return Promise.resolve(runsCache);
@@ -992,10 +992,10 @@
   }
 
   // assets/js/src/status.js
-  var STATUS_INTERVAL_MS = 4e3;
-  var STATUSES_DONE = ["completed", "done", "failed"];
-  var MAX_RETRY_DELAY_MS = 3e4;
-  var MAX_CONSECUTIVE_ERRORS = 5;
+  const STATUS_INTERVAL_MS = 4e3;
+  const STATUSES_DONE = ["completed", "done", "failed"];
+  const MAX_RETRY_DELAY_MS = 3e4;
+  const MAX_CONSECUTIVE_ERRORS = 5;
   function computeEta(window2, scanned, total) {
     if (total <= 0 || scanned <= 0 || window2.length < 2) {
       return null;
@@ -1153,15 +1153,15 @@
   initKeyForm();
   initStopScan();
   initStartForm();
-  var notifyPreview = function() {
+  let notifyPreview = function() {
   };
-  var treeApi = initDirTree(function() {
+  const treeApi = initDirTree(function() {
     notifyPreview();
   });
-  var previewApi = initPreview(treeApi);
+  const previewApi = initPreview(treeApi);
   notifyPreview = previewApi.schedule;
   initResultsFilter();
-  var jobIdInput = document.querySelector(".iss-job-id");
+  const jobIdInput = document.querySelector(".iss-job-id");
   if (jobIdInput && jobIdInput.value) {
     initPolling(jobIdInput.value);
   } else {
