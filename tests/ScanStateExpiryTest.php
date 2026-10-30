@@ -261,6 +261,16 @@ final class ScanStateExpiryTest extends TestCase {
 		$this->assertSame( 'completed', $status['status'] );
 		$this->assertSame( 5000, $status['completed'] );
 		$this->assertSame( 9, $status['findings'], 'malicious + suspicious + unknown from the summary block' );
+		$this->assertSame(
+			array(
+				'clean'      => 4991,
+				'malicious'  => 7,
+				'suspicious' => 2,
+				'unknown'    => 0,
+			),
+			$status['summary'],
+			'per-verdict counters power the completion breakdown'
+		);
 	}
 
 	/**

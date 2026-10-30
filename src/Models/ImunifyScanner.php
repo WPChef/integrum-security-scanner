@@ -304,6 +304,7 @@ final class ImunifyScanner implements \Integrum\SecurityScanner\Contracts\Scanne
 			'completed'     => $completed,
 			'total'         => $total_files,
 			'findings'      => $this->count_findings( $body ),
+			'summary'       => $this->summary_counts( $body ),
 			'total_bytes'   => $total_bytes,
 			'scanned_bytes' => $scanned_bytes,
 			'started_at'    => (int) ( $map['started_at'] ?? 0 ),
@@ -382,26 +383,49 @@ final class ImunifyScanner implements \Integrum\SecurityScanner\Contracts\Scanne
 	 * @param array<string, mixed> $body Last /results body.
 	 */
 	private function count_findings( array $body ): int {
+		$counts = $this->summary_counts( $body );
+		return $counts['malicious'] + $counts['suspicious'] + $counts['unknown'];
+	}
+
+	/**
+	 * Per-verdict counters from the scanner's summary block.
+	 *
+	 * The summary is authoritative: once a job completes the API trims the
+	 * per-file list to notable entries only (clean files disappear), so the
+	 * rows cannot be used to count. Responses without a summary fall back to
+	 * counting the verdict rows they do carry.
+	 *
+	 * @param array<string, mixed> $body Results payload.
+	 * @return array{clean: int, malicious: int, suspicious: int, unknown: int}
+	 */
+	private function summary_counts( array $body ): array {
+		$counts  = array(
+			'clean'      => 0,
+			'malicious'  => 0,
+			'suspicious' => 0,
+			'unknown'    => 0,
+		);
 		$summary = $body['summary'] ?? null;
+
 		if ( is_array( $summary ) ) {
-			$count = 0;
-			foreach ( array( 'malicious', 'suspicious', 'unknown' ) as $key ) {
-				$count += (int) ( $summary[ $key ] ?? 0 );
+			foreach ( $counts as $key => $unused ) {
+				$counts[ $key ] = max( 0, (int) ( $summary[ $key ] ?? 0 ) );
 			}
-			return $count;
+			return $counts;
 		}
 
-		$count = 0;
 		foreach ( (array) ( $body['files'] ?? array() ) as $row ) {
 			if ( ! is_array( $row ) || 'has_verdict' !== (string) ( $row['action'] ?? '' ) ) {
 				continue;
 			}
 			$verdict = (string) ( $row['verdict'] ?? '' );
-			if ( '' !== $verdict && 'clean' !== $verdict ) {
-				++$count;
+			if ( isset( $counts[ $verdict ] ) ) {
+				++$counts[ $verdict ];
+			} elseif ( '' !== $verdict ) {
+				++$counts['unknown'];
 			}
 		}
-		return $count;
+		return $counts;
 	}
 
 	/**

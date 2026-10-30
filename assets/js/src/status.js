@@ -180,7 +180,7 @@ export function initPolling( jobId ) {
 		}
 		hideScanNotice( statusSection );
 		loadResults( jobId ).then( function ( rows ) {
-			showSummary( statusSection, status, rows, completed || total, payload.data.findings );
+			showSummary( statusSection, status, rows, completed || total, payload.data.findings, payload.data.summary );
 			// The history table at the bottom gains a row for this run without a
 			// page reload (the server archived it when completion was observed).
 			refreshHistory();
@@ -218,18 +218,20 @@ export function initPolling( jobId ) {
 	 * @param {Array<{file_path: string, status: string}>} rows Result rows.
 	 * @param {number}  scanned      Files scanned, from the status counters.
 	 * @param {number|undefined} findings Non-clean count from the scanner summary.
+	 * @param {Object|undefined} summary  Per-verdict counters from the scanner.
 	 */
-	function showSummary( statusSection, status, rows, scanned, findings ) {
-		const summary = statusSection.parentElement
+	function showSummary( statusSection, status, rows, scanned, findings, summary ) {
+		const summaryEl = statusSection.parentElement
 			? statusSection.parentElement.querySelector( '.iss-scan-summary' )
 			: null;
-		if ( ! summary ) {
+		if ( ! summaryEl ) {
 			return;
 		}
 
 		const i18n = CFG.i18n || {};
 		let text;
 		let skin;
+		let note = '';
 		if ( 'failed' === status ) {
 			text = i18n.scanFailed || 'Scan failed.';
 			skin = 'iss-scan-summary--failed';
@@ -243,15 +245,66 @@ export function initPolling( jobId ) {
 				: rows.filter( function ( row ) {
 					return row.status && 'clean' !== row.status;
 				} ).length;
-			text = ( i18n.scanCompleted || 'Scan completed: {scanned} files scanned, {suspicious} suspicious.' )
-				.replace( '{scanned}', String( scanned || rows.length ) )
-				.replace( '{suspicious}', String( suspicious ) );
-			skin = suspicious > 0 ? 'iss-scan-summary--findings' : 'iss-scan-summary--clean';
+			const total = scanned || rows.length;
+
+			if ( suspicious > 0 ) {
+				const breakdown = verdictBreakdown( summary, i18n );
+				text = ( i18n.scanCompletedFindings || 'Scan completed: {scanned} files scanned — {threats} threats found ({breakdown}).' )
+					.replace( '{scanned}', String( total ) )
+					.replace( '{threats}', String( suspicious ) )
+					.replace( '{breakdown}', breakdown );
+				skin = 'iss-scan-summary--findings';
+
+				// The scanner may report findings without the per-file list.
+				// Say so instead of leaving an empty results tree unexplained.
+				if ( rows.length === 0 ) {
+					note = i18n.scanFindingsNoList
+						|| 'The scanner did not return the per-file list, so the files themselves are not shown. Run the scan again to list them.';
+				}
+			} else {
+				text = ( i18n.scanCompletedClean || 'Scan completed: {scanned} files scanned — no threats found.' )
+					.replace( '{scanned}', String( total ) );
+				skin = 'iss-scan-summary--clean';
+			}
 		}
 
-		summary.textContent = text;
-		summary.className = 'iss-scan-summary mb-4 rounded-lg border px-4 py-3 text-sm ' + skin;
-		summary.hidden = false;
+		summaryEl.textContent = text;
+		summaryEl.className = 'iss-scan-summary mb-4 rounded-lg border px-4 py-3 text-sm ' + skin;
+		summaryEl.hidden = false;
+
+		if ( '' !== note ) {
+			const noteEl = document.createElement( 'p' );
+			noteEl.className = 'mt-1 text-xs opacity-75';
+			noteEl.textContent = note;
+			summaryEl.appendChild( noteEl );
+		}
+	}
+
+	/**
+	 * Builds the "N malicious, N suspicious" part of the completion summary
+	 * from the scanner's per-verdict counters, skipping zero categories.
+	 *
+	 * @param {Object|undefined} summary Per-verdict counters.
+	 * @param {Object}           i18n    Translated labels.
+	 * @return {string}
+	 */
+	function verdictBreakdown( summary, i18n ) {
+		if ( ! summary ) {
+			return '';
+		}
+		const labels = {
+			malicious: i18n.verdictMalicious || 'malicious',
+			suspicious: i18n.verdictSuspicious || 'suspicious',
+			unknown: i18n.verdictUnknown || 'unknown',
+		};
+		const parts = [];
+		Object.keys( labels ).forEach( function ( key ) {
+			const count = Number( summary[ key ] ) || 0;
+			if ( count > 0 ) {
+				parts.push( count + ' ' + labels[ key ] );
+			}
+		} );
+		return parts.join( ', ' );
 	}
 
 	pollStatus();
