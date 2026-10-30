@@ -162,6 +162,7 @@ final class AdminController {
 					'scanCompletedClean'    => __( 'Scan completed: {scanned} files scanned — no threats found.', 'integrum-security-scanner' ),
 					'scanCompletedFindings' => __( 'Scan completed: {scanned} files scanned — {threats} threats found ({breakdown}).', 'integrum-security-scanner' ),
 					'scanFindingsNoList'    => __( 'The scanner did not return the per-file list, so the files themselves are not shown. Run the scan again to list them.', 'integrum-security-scanner' ),
+					'scanFindingsListError' => __( 'Could not load the file list. Reload the page to try again, or check the scan history below — the files found are kept there.', 'integrum-security-scanner' ),
 					'verdictMalicious'      => __( 'malicious', 'integrum-security-scanner' ),
 					'verdictSuspicious'     => __( 'suspicious', 'integrum-security-scanner' ),
 					'verdictUnknown'        => __( 'unknown', 'integrum-security-scanner' ),

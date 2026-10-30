@@ -565,11 +565,14 @@
   const onlySuspicious = document.getElementById("iss-only-suspicious");
   function loadResults(jobId) {
     return fetchJSON("integrum_security_scanner_results", { job_id: jobId }).then(function(payload) {
-      const rows = payload && payload.data && payload.data.results || [];
+      if (!payload || !payload.success) {
+        return { rows: [], failed: true };
+      }
+      const rows = payload.data && payload.data.results || [];
       attachResults(rows);
-      return rows;
+      return { rows, failed: false };
     }).catch(function() {
-      return [];
+      return { rows: [], failed: true };
     });
   }
   function clearResults() {
@@ -1094,8 +1097,8 @@
         startBtn.disabled = false;
       }
       hideScanNotice(statusSection);
-      loadResults(jobId).then(function(rows) {
-        showSummary(statusSection, status, rows, completed || total, payload.data.findings, payload.data.summary);
+      loadResults(jobId).then(function(res) {
+        showSummary(statusSection, status, res.rows, completed || total, payload.data.findings, payload.data.summary, res.failed);
         refreshHistory();
       });
     }
@@ -1111,7 +1114,7 @@
         }
       );
     }
-    function showSummary(statusSection2, status, rows, scanned, findings, summary) {
+    function showSummary(statusSection2, status, rows, scanned, findings, summary, failed) {
       const summaryEl = statusSection2.parentElement ? statusSection2.parentElement.querySelector(".iss-scan-summary") : null;
       if (!summaryEl) {
         return;
@@ -1133,7 +1136,7 @@
           text = (i18n.scanCompletedFindings || "Scan completed: {scanned} files scanned \u2014 {threats} threats found ({breakdown}).").replace("{scanned}", String(total)).replace("{threats}", String(suspicious)).replace("{breakdown}", breakdown);
           skin = "iss-scan-summary--findings";
           if (rows.length === 0) {
-            note = i18n.scanFindingsNoList || "The scanner did not return the per-file list, so the files themselves are not shown. Run the scan again to list them.";
+            note = failed ? i18n.scanFindingsListError || "Could not load the file list. Reload the page to try again, or check the scan history below \u2014 the files found are kept there." : i18n.scanFindingsNoList || "The scanner did not return the per-file list, so the files themselves are not shown. Run the scan again to list them.";
           }
         } else {
           text = (i18n.scanCompletedClean || "Scan completed: {scanned} files scanned \u2014 no threats found.").replace("{scanned}", String(total));

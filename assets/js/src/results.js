@@ -15,21 +15,25 @@ const onlySuspicious = document.getElementById( 'iss-only-suspicious' );
 
 /**
  * Fetches the verdicts for a finished job and attaches them to the tree.
- * Resolves with the result rows (empty on failure) so the caller can build
- * its own completion summary from the counts.
+ * Resolves with `{ rows, failed }`: `failed` distinguishes a transport or
+ * server-side refusal (retryable — the scanner still has the results) from
+ * a genuinely empty row list (the scanner trimmed the files).
  *
  * @param {string} jobId Job id.
- * @return {Promise<Array<{file_path: string, status: string}>>}
+ * @return {Promise<{rows: Array<{file_path: string, status: string}>, failed: boolean}>}
  */
 export function loadResults( jobId ) {
 	return fetchJSON( 'integrum_security_scanner_results', { job_id: jobId } )
 		.then( function ( payload ) {
-			const rows = ( payload && payload.data && payload.data.results ) || [];
+			if ( ! payload || ! payload.success ) {
+				return { rows: [], failed: true };
+			}
+			const rows = ( payload.data && payload.data.results ) || [];
 			attachResults( rows );
-			return rows;
+			return { rows: rows, failed: false };
 		} )
 		.catch( function () {
-			return [];
+			return { rows: [], failed: true };
 		} );
 }
 

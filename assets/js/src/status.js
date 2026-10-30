@@ -179,8 +179,8 @@ export function initPolling( jobId ) {
 			startBtn.disabled = false;
 		}
 		hideScanNotice( statusSection );
-		loadResults( jobId ).then( function ( rows ) {
-			showSummary( statusSection, status, rows, completed || total, payload.data.findings, payload.data.summary );
+		loadResults( jobId ).then( function ( res ) {
+			showSummary( statusSection, status, res.rows, completed || total, payload.data.findings, payload.data.summary, res.failed );
 			// The history table at the bottom gains a row for this run without a
 			// page reload (the server archived it when completion was observed).
 			refreshHistory();
@@ -219,8 +219,10 @@ export function initPolling( jobId ) {
 	 * @param {number}  scanned      Files scanned, from the status counters.
 	 * @param {number|undefined} findings Non-clean count from the scanner summary.
 	 * @param {Object|undefined} summary  Per-verdict counters from the scanner.
+	 * @param {boolean} failed          The results request itself failed (distinct
+	 *                                  from a legitimately empty row list).
 	 */
-	function showSummary( statusSection, status, rows, scanned, findings, summary ) {
+	function showSummary( statusSection, status, rows, scanned, findings, summary, failed ) {
 		const summaryEl = statusSection.parentElement
 			? statusSection.parentElement.querySelector( '.iss-scan-summary' )
 			: null;
@@ -255,11 +257,18 @@ export function initPolling( jobId ) {
 					.replace( '{breakdown}', breakdown );
 				skin = 'iss-scan-summary--findings';
 
-				// The scanner may report findings without the per-file list.
-				// Say so instead of leaving an empty results tree unexplained.
+				// Findings without rows have two distinct causes. The scanner
+				// may trim the per-file list once a job completes (final for
+				// this run — a re-scan would burn quota), or the results
+				// request itself may have failed (retryable: the scanner
+				// still holds the data, and the history below keeps the
+				// files recorded during the status poll). Say which one.
 				if ( rows.length === 0 ) {
-					note = i18n.scanFindingsNoList
-						|| 'The scanner did not return the per-file list, so the files themselves are not shown. Run the scan again to list them.';
+					note = failed
+						? ( i18n.scanFindingsListError
+							|| 'Could not load the file list. Reload the page to try again, or check the scan history below — the files found are kept there.' )
+						: ( i18n.scanFindingsNoList
+							|| 'The scanner did not return the per-file list, so the files themselves are not shown. Run the scan again to list them.' );
 				}
 			} else {
 				text = ( i18n.scanCompletedClean || 'Scan completed: {scanned} files scanned — no threats found.' )
