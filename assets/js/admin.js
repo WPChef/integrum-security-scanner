@@ -563,7 +563,10 @@
   const treeEl = document.querySelector(".iss-dirtree");
   const filterWrap = document.getElementById("iss-only-suspicious-wrap");
   const onlySuspicious = document.getElementById("iss-only-suspicious");
-  function loadResults(jobId) {
+  const RESULTS_ATTEMPTS = 3;
+  const RESULTS_RETRY_DELAY_MS = 1500;
+  function loadResults(jobId, attempt) {
+    const tries = attempt || 1;
     return fetchJSON("integrum_security_scanner_results", { job_id: jobId }).then(function(payload) {
       if (!payload || !payload.success) {
         return { rows: [], failed: true };
@@ -572,7 +575,14 @@
       attachResults(rows);
       return { rows, failed: false };
     }).catch(function() {
-      return { rows: [], failed: true };
+      if (tries >= RESULTS_ATTEMPTS) {
+        return { rows: [], failed: true };
+      }
+      return new Promise(function(resolve) {
+        window.setTimeout(resolve, RESULTS_RETRY_DELAY_MS * tries);
+      }).then(function() {
+        return loadResults(jobId, tries + 1);
+      });
     });
   }
   function clearResults() {
@@ -1136,7 +1146,7 @@
           text = (i18n.scanCompletedFindings || "Scan completed: {scanned} files scanned \u2014 {threats} threats found ({breakdown}).").replace("{scanned}", String(total)).replace("{threats}", String(suspicious)).replace("{breakdown}", breakdown);
           skin = "iss-scan-summary--findings";
           if (rows.length === 0) {
-            note = failed ? i18n.scanFindingsListError || "Could not load the file list. Reload the page to try again, or check the scan history below \u2014 the files found are kept there." : i18n.scanFindingsNoList || "The scanner did not return the per-file list, so the files themselves are not shown. Run the scan again to list them.";
+            note = failed ? i18n.scanFindingsListError || "The file list could not be loaded from the scanner. The counts above come from the scanner's own summary; the list is not available for this run." : i18n.scanFindingsNoList || "The scanner did not return the per-file list, so the files themselves are not shown. Run the scan again to list them.";
           }
         } else {
           text = (i18n.scanCompletedClean || "Scan completed: {scanned} files scanned \u2014 no threats found.").replace("{scanned}", String(total));

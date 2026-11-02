@@ -260,13 +260,15 @@ export function initPolling( jobId ) {
 				// Findings without rows have two distinct causes. The scanner
 				// may trim the per-file list once a job completes (final for
 				// this run — a re-scan would burn quota), or the results
-				// request itself may have failed (retryable: the scanner
-				// still holds the data, and the history below keeps the
-				// files recorded during the status poll). Say which one.
+				// request may have failed. Say which — and for the failure
+				// case do not point at a reload (the active job is already
+				// cleared, so a reload has no id to re-fetch) or at the
+				// history (it is archived from the same call and can hold
+				// the count without the files).
 				if ( rows.length === 0 ) {
 					note = failed
 						? ( i18n.scanFindingsListError
-							|| 'Could not load the file list. Reload the page to try again, or check the scan history below — the files found are kept there.' )
+							|| 'The file list could not be loaded from the scanner. The counts above come from the scanner\'s own summary; the list is not available for this run.' )
 						: ( i18n.scanFindingsNoList
 							|| 'The scanner did not return the per-file list, so the files themselves are not shown. Run the scan again to list them.' );
 				}
