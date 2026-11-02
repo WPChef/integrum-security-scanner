@@ -1144,6 +1144,9 @@
         if (suspicious > 0) {
           const breakdown = verdictBreakdown(summary, i18n);
           text = (i18n.scanCompletedFindings || "Scan completed: {scanned} files scanned \u2014 {threats} threats found ({breakdown}).").replace("{scanned}", String(total)).replace("{threats}", String(suspicious)).replace("{breakdown}", breakdown);
+          if ("" === breakdown) {
+            text = text.replace(/\s\(\s\)/, "");
+          }
           skin = "iss-scan-summary--findings";
           if (rows.length === 0) {
             note = failed ? i18n.scanFindingsListError || "The file list could not be loaded from the scanner. The counts above come from the scanner's own summary; the list is not available for this run." : i18n.scanFindingsNoList || "The scanner did not return the per-file list, so the files themselves are not shown. Run the scan again to list them.";

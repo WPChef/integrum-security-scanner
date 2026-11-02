@@ -255,6 +255,11 @@ export function initPolling( jobId ) {
 					.replace( '{scanned}', String( total ) )
 					.replace( '{threats}', String( suspicious ) )
 					.replace( '{breakdown}', breakdown );
+				// `summary` may be absent in older payloads: the template then
+				// keeps a dangling " ( )" tail that must not be shown.
+				if ( '' === breakdown ) {
+					text = text.replace( /\s\(\s\)/, '' );
+				}
 				skin = 'iss-scan-summary--findings';
 
 				// Findings without rows have two distinct causes. The scanner
