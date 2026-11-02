@@ -13,23 +13,46 @@ const treeEl = document.querySelector( '.iss-dirtree' );
 const filterWrap = document.getElementById( 'iss-only-suspicious-wrap' );
 const onlySuspicious = document.getElementById( 'iss-only-suspicious' );
 
+const RESULTS_ATTEMPTS = 3;
+const RESULTS_RETRY_DELAY_MS = 1500;
+
 /**
  * Fetches the verdicts for a finished job and attaches them to the tree.
- * Resolves with the result rows (empty on failure) so the caller can build
- * its own completion summary from the counts.
+ * Resolves with `{ rows, failed }`: `failed` means the rows could not be
+ * fetched at all, which is distinct from the scanner legitimately returning
+ * an empty list once a job completes.
  *
- * @param {string} jobId Job id.
- * @return {Promise<Array<{file_path: string, status: string}>>}
+ * Transport failures are retried, because the job pointer is cleared the
+ * moment completion is observed and the job id exists only in this page:
+ * a reload cannot re-issue this request (there is no active job left to
+ * resolve), so the retry has to happen here. A refused response
+ * (`success:false` — e.g. no job, forbidden) is not retried: it will not
+ * change on a second attempt.
+ *
+ * @param {string} jobId          Job id.
+ * @param {number} [attempt]      Current attempt, 1-based.
+ * @return {Promise<{rows: Array<{file_path: string, status: string}>, failed: boolean}>}
  */
-export function loadResults( jobId ) {
+export function loadResults( jobId, attempt ) {
+	const tries = attempt || 1;
 	return fetchJSON( 'integrum_security_scanner_results', { job_id: jobId } )
 		.then( function ( payload ) {
-			const rows = ( payload && payload.data && payload.data.results ) || [];
+			if ( ! payload || ! payload.success ) {
+				return { rows: [], failed: true };
+			}
+			const rows = ( payload.data && payload.data.results ) || [];
 			attachResults( rows );
-			return rows;
+			return { rows: rows, failed: false };
 		} )
 		.catch( function () {
-			return [];
+			if ( tries >= RESULTS_ATTEMPTS ) {
+				return { rows: [], failed: true };
+			}
+			return new Promise( function ( resolve ) {
+				window.setTimeout( resolve, RESULTS_RETRY_DELAY_MS * tries );
+			} ).then( function () {
+				return loadResults( jobId, tries + 1 );
+			} );
 		} );
 }
 
