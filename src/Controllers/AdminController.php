@@ -33,6 +33,11 @@ final class AdminController {
 	private const CAPABILITY      = 'manage_options';
 	private const OPTION_SETTINGS = 'integrum_security_scanner_scan_settings';
 
+	private const TRANSIENT_ACTIVE_JOB    = 'integrum_security_scanner_active_job';
+	private const TRANSIENT_STARTED_JOB   = 'integrum_security_scanner_started_job';
+	private const TRANSIENT_DB_ACTIVE_JOB = 'integrum_security_scanner_db_active_job';
+	private const TRANSIENT_DB_STARTED_JOB = 'integrum_security_scanner_db_started_job';
+
 	/**
 	 * Directory slugs checked by default (before anything is saved).
 	 *
@@ -255,25 +260,22 @@ final class AdminController {
 					'code'    => $e->getCode(),
 				)
 			);
-
-			$is_key_error = 401 === $e->getCode();
-			$real_message = $e->getMessage();
-			$message      = $is_key_error
-				? __( 'The site key is missing or was rejected. Use the Connection form above to obtain a new key, then start the database scan again.', 'integrum-security-scanner' )
-				: ( '' !== $real_message ? $real_message : __( 'Could not start the database scan. Please try again in a moment.', 'integrum-security-scanner' ) );
-
 			$this->redirect(
 				array(
 					'type'    => 'error',
-					'message' => $message,
+					'message' => $this->message_for_start_failure(
+						$e,
+						__( 'The site key is missing or was rejected. Use the Connection form above to obtain a new key, then start the database scan again.', 'integrum-security-scanner' ),
+						__( 'Could not start the database scan. Please try again in a moment.', 'integrum-security-scanner' )
+					),
 					'scope'   => 'db_scan',
 				)
 			);
 			return;
 		}
 
-		set_transient( 'integrum_security_scanner_db_active_job', $job_id, HOUR_IN_SECONDS );
-		set_transient( 'integrum_security_scanner_db_started_job', $job_id, 5 * MINUTE_IN_SECONDS );
+		set_transient( self::TRANSIENT_DB_ACTIVE_JOB, $job_id, HOUR_IN_SECONDS );
+		set_transient( self::TRANSIENT_DB_STARTED_JOB, $job_id, 5 * MINUTE_IN_SECONDS );
 
 		$this->redirect(
 			array(
@@ -384,29 +386,26 @@ final class AdminController {
 					'code'    => $e->getCode(),
 				)
 			);
-
-			$is_key_error = 401 === $e->getCode();
-			$real_message = $e->getMessage();
-			$message      = $is_key_error
-				? __( 'The site key is missing or was rejected. Use the Connection form above to obtain a new key, then start the scan again.', 'integrum-security-scanner' )
-				: ( '' !== $real_message ? $real_message : __( 'Could not start the scan. Please try again in a moment.', 'integrum-security-scanner' ) );
-
 			$this->redirect(
 				array(
 					'type'    => 'error',
-					'message' => $message,
+					'message' => $this->message_for_start_failure(
+						$e,
+						__( 'The site key is missing or was rejected. Use the Connection form above to obtain a new key, then start the scan again.', 'integrum-security-scanner' ),
+						__( 'Could not start the scan. Please try again in a moment.', 'integrum-security-scanner' )
+					),
 					'scope'   => 'scan',
 				)
 			);
 			return;
 		}
 
-		set_transient( 'integrum_security_scanner_active_job', $job_id, HOUR_IN_SECONDS );
+		set_transient( self::TRANSIENT_ACTIVE_JOB, $job_id, HOUR_IN_SECONDS );
 		// One-shot marker consumed by render() on the FIRST page load after the
 		// PRG redirect. It is NOT a persistent "scan in progress" flag: once
 		// consumed, a page reload no longer surfaces a running scan, so the UI
 		// returns to idle and the scan is not silently resumed by the poller.
-		set_transient( 'integrum_security_scanner_started_job', $job_id, 5 * MINUTE_IN_SECONDS );
+		set_transient( self::TRANSIENT_STARTED_JOB, $job_id, 5 * MINUTE_IN_SECONDS );
 
 		$this->redirect(
 			array(
@@ -421,19 +420,9 @@ final class AdminController {
 	 * AJAX: returns current scan status for the active job.
 	 */
 	public function ajax_status(): void {
-		check_ajax_referer( self::NONCE_POLL, 'nonce' );
+		$this->guard_ajax();
 
-		if ( ! current_user_can( self::CAPABILITY ) ) {
-			wp_send_json_error( array( 'message' => 'forbidden' ), 403 );
-		}
-
-		$job_id = '';
-		if ( isset( $_POST['job_id'] ) ) {
-			$job_id = sanitize_text_field( wp_unslash( $_POST['job_id'] ) );
-		} elseif ( get_transient( 'integrum_security_scanner_active_job' ) ) {
-			$job_id = (string) get_transient( 'integrum_security_scanner_active_job' );
-		}
-
+		$job_id = $this->resolve_job_id( self::TRANSIENT_ACTIVE_JOB );
 		if ( '' === $job_id ) {
 			wp_send_json_error( array( 'message' => 'no job' ) );
 		}
@@ -445,7 +434,7 @@ final class AdminController {
 		}
 
 		if ( in_array( $status['status'], array( 'completed', 'done', 'failed' ), true ) ) {
-			delete_transient( 'integrum_security_scanner_active_job' );
+			delete_transient( self::TRANSIENT_ACTIVE_JOB );
 
 			// Archive the run once, at the moment completion is first observed.
 			// Failed scans are not archived: an empty "0 problems" row would read
@@ -468,13 +457,9 @@ final class AdminController {
 	 * returns to the idle state.
 	 */
 	public function ajax_stop(): void {
-		check_ajax_referer( self::NONCE_POLL, 'nonce' );
+		$this->guard_ajax();
 
-		if ( ! current_user_can( self::CAPABILITY ) ) {
-			wp_send_json_error( array( 'message' => 'forbidden' ), 403 );
-		}
-
-		delete_transient( 'integrum_security_scanner_active_job' );
+		delete_transient( self::TRANSIENT_ACTIVE_JOB );
 
 		wp_send_json_success( array( 'status' => 'stopped' ) );
 	}
@@ -484,11 +469,7 @@ final class AdminController {
 	 * table: the per-run problem-file tree is fetched lazily from here too.
 	 */
 	public function ajax_history(): void {
-		check_ajax_referer( self::NONCE_POLL, 'nonce' );
-
-		if ( ! current_user_can( self::CAPABILITY ) ) {
-			wp_send_json_error( array( 'message' => 'forbidden' ), 403 );
-		}
+		$this->guard_ajax();
 
 		wp_send_json_success( array( 'runs' => $this->history_rows() ) );
 	}
@@ -550,21 +531,9 @@ final class AdminController {
 	 * AJAX: returns scan results for a job.
 	 */
 	public function ajax_results(): void {
-		check_ajax_referer( self::NONCE_POLL, 'nonce' );
+		$this->guard_ajax();
 
-		if ( ! current_user_can( self::CAPABILITY ) ) {
-			wp_send_json_error( array( 'message' => 'forbidden' ), 403 );
-		}
-
-		// TODO(dry): this job_id resolution block is duplicated in ajax_status();
-		// extract a private resolve_job_id() helper returning `?string`.
-		$job_id = '';
-		if ( isset( $_POST['job_id'] ) ) {
-			$job_id = sanitize_text_field( wp_unslash( $_POST['job_id'] ) );
-		} elseif ( get_transient( 'integrum_security_scanner_active_job' ) ) {
-			$job_id = (string) get_transient( 'integrum_security_scanner_active_job' );
-		}
-
+		$job_id = $this->resolve_job_id( self::TRANSIENT_ACTIVE_JOB );
 		if ( '' === $job_id ) {
 			wp_send_json_error( array( 'message' => 'no job' ) );
 		}
@@ -582,17 +551,13 @@ final class AdminController {
 	 * AJAX: advances a database scan job (submit next batch / finalise).
 	 */
 	public function ajax_db_status(): void {
-		check_ajax_referer( self::NONCE_POLL, 'nonce' );
-
-		if ( ! current_user_can( self::CAPABILITY ) ) {
-			wp_send_json_error( array( 'message' => 'forbidden' ), 403 );
-		}
+		$this->guard_ajax();
 
 		if ( null === $this->db_scanner ) {
 			wp_send_json_error( array( 'message' => 'unavailable' ) );
 		}
 
-		$job_id = $this->resolve_db_job_id();
+		$job_id = $this->resolve_job_id( self::TRANSIENT_DB_ACTIVE_JOB );
 		if ( '' === $job_id ) {
 			wp_send_json_error( array( 'message' => 'no job' ) );
 		}
@@ -600,12 +565,12 @@ final class AdminController {
 		try {
 			$status = $this->db_scanner->tick( $job_id );
 		} catch ( ScanException $e ) {
-			delete_transient( 'integrum_security_scanner_db_active_job' );
+			delete_transient( self::TRANSIENT_DB_ACTIVE_JOB );
 			wp_send_json_error( array( 'message' => $e->getMessage() ) );
 		}
 
 		if ( in_array( $status['status'], array( 'completed', 'failed', 'stopped' ), true ) ) {
-			delete_transient( 'integrum_security_scanner_db_active_job' );
+			delete_transient( self::TRANSIENT_DB_ACTIVE_JOB );
 		}
 
 		wp_send_json_success(
@@ -622,22 +587,18 @@ final class AdminController {
 	 * AJAX: stops local DB scan submission.
 	 */
 	public function ajax_db_stop(): void {
-		check_ajax_referer( self::NONCE_POLL, 'nonce' );
-
-		if ( ! current_user_can( self::CAPABILITY ) ) {
-			wp_send_json_error( array( 'message' => 'forbidden' ), 403 );
-		}
+		$this->guard_ajax();
 
 		if ( null === $this->db_scanner ) {
 			wp_send_json_error( array( 'message' => 'unavailable' ) );
 		}
 
-		$job_id = $this->resolve_db_job_id();
+		$job_id = $this->resolve_job_id( self::TRANSIENT_DB_ACTIVE_JOB );
 		if ( '' !== $job_id ) {
 			$this->db_scanner->stop( $job_id );
 		}
-		delete_transient( 'integrum_security_scanner_db_active_job' );
-		delete_transient( 'integrum_security_scanner_db_started_job' );
+		delete_transient( self::TRANSIENT_DB_ACTIVE_JOB );
+		delete_transient( self::TRANSIENT_DB_STARTED_JOB );
 
 		wp_send_json_success( array( 'status' => 'stopped' ) );
 	}
@@ -646,17 +607,13 @@ final class AdminController {
 	 * AJAX: returns database scan findings.
 	 */
 	public function ajax_db_results(): void {
-		check_ajax_referer( self::NONCE_POLL, 'nonce' );
-
-		if ( ! current_user_can( self::CAPABILITY ) ) {
-			wp_send_json_error( array( 'message' => 'forbidden' ), 403 );
-		}
+		$this->guard_ajax();
 
 		if ( null === $this->db_scanner ) {
 			wp_send_json_error( array( 'message' => 'unavailable' ) );
 		}
 
-		$job_id = $this->resolve_db_job_id();
+		$job_id = $this->resolve_job_id( self::TRANSIENT_DB_ACTIVE_JOB );
 		if ( '' === $job_id ) {
 			wp_send_json_error( array( 'message' => 'no job' ) );
 		}
@@ -676,25 +633,10 @@ final class AdminController {
 	}
 
 	/**
-	 * Resolves the active DB job id from POST or transient.
-	 */
-	private function resolve_db_job_id(): string {
-		if ( isset( $_POST['job_id'] ) ) {
-			return sanitize_text_field( wp_unslash( $_POST['job_id'] ) );
-		}
-		$cached = get_transient( 'integrum_security_scanner_db_active_job' );
-		return false !== $cached ? (string) $cached : '';
-	}
-
-	/**
 	 * AJAX: returns the child directories of a tree node (lazy loading).
 	 */
 	public function ajax_dirchildren(): void {
-		check_ajax_referer( self::NONCE_POLL, 'nonce' );
-
-		if ( ! current_user_can( self::CAPABILITY ) ) {
-			wp_send_json_error( array( 'message' => 'forbidden' ), 403 );
-		}
+		$this->guard_ajax();
 
 		$rel = isset( $_POST['rel'] ) ? sanitize_text_field( wp_unslash( $_POST['rel'] ) ) : '';
 		if ( null === $this->validate_rel_dir( $rel ) ) {
@@ -713,11 +655,7 @@ final class AdminController {
 	 * plain directory slugs are the legacy/no-JS fallback.
 	 */
 	public function ajax_preview(): void {
-		check_ajax_referer( self::NONCE_POLL, 'nonce' );
-
-		if ( ! current_user_can( self::CAPABILITY ) ) {
-			wp_send_json_error( array( 'message' => 'forbidden' ), 403 );
-		}
+		$this->guard_ajax();
 
 		$allowed = $this->directory_options();
 		$include = $this->parse_masks( $_POST['integrum_security_scanner_include'] ?? '' ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized, WordPress.Security.ValidatedSanitizedInput.MissingUnslash -- sanitised inside parse_masks().
@@ -759,9 +697,9 @@ final class AdminController {
 		// up a previously started scan and resume polling. The scan keeps running
 		// server-side while the original tab polls; a reload simply returns the
 		// UI to idle rather than silently continuing.
-		$job_id      = $this->consume_started_job();
-		$db_job_id   = $this->consume_db_started_job();
-		$notice      = $this->consume_notice();
+		$job_id    = $this->consume_one_shot_job( self::TRANSIENT_STARTED_JOB );
+		$db_job_id = $this->consume_one_shot_job( self::TRANSIENT_DB_STARTED_JOB );
+		$notice    = $this->consume_notice();
 		$dir_options = $this->directory_options();
 		$settings    = $this->load_scan_settings();
 
@@ -1259,36 +1197,57 @@ final class AdminController {
 	}
 
 	/**
-	 * Reads and clears the one-shot "scan just started" transient.
-	 *
-	 * Set by handle_start_scan() right before the PRG redirect and consumed
-	 * here on the first render so the UI shows the running scan exactly once.
-	 * Any subsequent load (reload, reopening the page) finds it gone and renders
-	 * the idle state, preventing the scan from being silently resumed.
-	 *
-	 * @return string Job id, or '' when no scan was just started.
+	 * Nonce + capability gate shared by every plugin AJAX action.
 	 */
-	private function consume_started_job(): string {
-		$job_id = get_transient( 'integrum_security_scanner_started_job' );
+	private function guard_ajax(): void {
+		check_ajax_referer( self::NONCE_POLL, 'nonce' );
+
+		if ( ! current_user_can( self::CAPABILITY ) ) {
+			wp_send_json_error( array( 'message' => 'forbidden' ), 403 );
+		}
+	}
+
+	/**
+	 * Resolves job id from POST or the given active-job transient.
+	 *
+	 * @param string $active_transient Transient key for the in-progress job.
+	 */
+	private function resolve_job_id( string $active_transient ): string {
+		if ( isset( $_POST['job_id'] ) ) {
+			return sanitize_text_field( wp_unslash( $_POST['job_id'] ) );
+		}
+		$cached = get_transient( $active_transient );
+		return false !== $cached ? (string) $cached : '';
+	}
+
+	/**
+	 * Reads and clears a one-shot "scan just started" transient (PRG → first render).
+	 *
+	 * @param string $started_transient Transient key set right before redirect.
+	 * @return string Job id, or '' when none pending.
+	 */
+	private function consume_one_shot_job( string $started_transient ): string {
+		$job_id = get_transient( $started_transient );
 		if ( false !== $job_id ) {
-			delete_transient( 'integrum_security_scanner_started_job' );
+			delete_transient( $started_transient );
 			return (string) $job_id;
 		}
 		return '';
 	}
 
 	/**
-	 * One-shot DB job id after start_db_scan PRG (same semantics as file scan).
+	 * Maps ScanException from start_* into a user-facing notice message.
 	 *
-	 * @return string Job id or ''.
+	 * @param ScanException $e               Start failure.
+	 * @param string        $key_rejected    Copy when code is 401.
+	 * @param string        $generic_fallback Copy when message empty and not 401.
 	 */
-	private function consume_db_started_job(): string {
-		$job_id = get_transient( 'integrum_security_scanner_db_started_job' );
-		if ( false !== $job_id ) {
-			delete_transient( 'integrum_security_scanner_db_started_job' );
-			return (string) $job_id;
+	private function message_for_start_failure( ScanException $e, string $key_rejected, string $generic_fallback ): string {
+		if ( 401 === $e->getCode() ) {
+			return $key_rejected;
 		}
-		return '';
+		$real = $e->getMessage();
+		return '' !== $real ? $real : $generic_fallback;
 	}
 
 	/**

@@ -15,6 +15,7 @@ use Integrum\SecurityScanner\Contracts\HttpClientInterface;
 use Integrum\SecurityScanner\Contracts\HttpException;
 use Integrum\SecurityScanner\Contracts\LoggerInterface;
 use Integrum\SecurityScanner\Contracts\ScanException;
+use Integrum\SecurityScanner\Models\ImunifyHttpErrors;
 
 /**
  * Native DB endpoints: start → db-content batches → db-status / db-results.
@@ -396,33 +397,12 @@ final class ImunifyDbScanner implements DbScannerInterface {
 	 * @param array{code: int, body: array<string, mixed>} $resp Response.
 	 */
 	private function auth_or_quota_error( array $resp ): ScanException {
-		$http_code = (int) $resp['code'];
-		$body      = is_array( $resp['body'] ?? null ) ? $resp['body'] : array();
-		$api_code  = (string) ( $body['code'] ?? '' );
-		$message   = (string) ( $body['error'] ?? '' );
-
-		if ( 403 === $http_code && 'quota_exceeded' === $api_code ) {
-			$msg = '' !== $message ? $message : __( 'Database scan quota exceeded.', 'integrum-security-scanner' );
-			$quota = is_array( $body['quota'] ?? null ) ? $body['quota'] : array();
-			$resets = (int) ( $quota['db_resets_in'] ?? $quota['resets_in'] ?? 0 );
-			if ( $resets > 0 ) {
-				$days = max( 1, (int) round( $resets / 86400 ) );
-				$msg .= ' ' . sprintf(
-					/* translators: %d: days until DB quota resets */
-					_n( 'Resets in %d day.', 'Resets in %d days.', $days, 'integrum-security-scanner' ),
-					$days
-				);
-			}
-			return new ScanException( $msg, 403 );
-		}
-
-		if ( '' === $message ) {
-			$message = 401 === $http_code
-				? __( 'Invalid site key.', 'integrum-security-scanner' )
-				: __( 'Database scanner rejected the request.', 'integrum-security-scanner' );
-		}
-
-		return new ScanException( $message, 401 === $http_code ? 401 : 403 );
+		return ImunifyHttpErrors::auth_or_quota(
+			$resp,
+			__( 'Database scan quota exceeded.', 'integrum-security-scanner' ),
+			__( 'Database scanner rejected the request.', 'integrum-security-scanner' ),
+			true
+		);
 	}
 
 	/**

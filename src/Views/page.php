@@ -36,6 +36,19 @@ declare( strict_types = 1 );
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
+
+/**
+ * Renders the shared notice partial when the pending notice matches $scope.
+ *
+ * @param array{type: string, message: string, scope: string}|null $notice Pending notice.
+ * @param string                                                   $scope  Section scope.
+ */
+$iss_render_notice = static function ( ?array $notice, string $scope ): void {
+	if ( null === $notice || $scope !== ( $notice['scope'] ?? '' ) ) {
+		return;
+	}
+	require INTEGRUM_SECURITY_SCANNER_DIR . 'src/Views/notice.php';
+};
 ?>
 <div class="wrap integrum-security-scanner" id="integrum-security-scanner-app">
 
@@ -173,9 +186,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 					</button>
 				</div>
 
-				<?php if ( null !== $notice && 'connection' === $notice['scope'] ) : ?>
-					<?php require INTEGRUM_SECURITY_SCANNER_DIR . 'src/Views/notice.php'; ?>
-				<?php endif; ?>
+				<?php $iss_render_notice( $notice, 'connection' ); ?>
 			</form>
 
 			<?php require INTEGRUM_SECURITY_SCANNER_DIR . 'src/Views/terms-modal.php'; ?>
@@ -321,12 +332,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 				</div>
 			</form>
 
-			<?php if ( null !== $notice && 'scan' === $notice['scope'] ) : ?>
-				<?php require INTEGRUM_SECURITY_SCANNER_DIR . 'src/Views/notice.php'; ?>
-			<?php endif; ?>
+			<?php $iss_render_notice( $notice, 'scan' ); ?>
 		</section>
 
-		<section class="iss-db-scan rounded-xl border border-slate-200 bg-white p-6 shadow-sm" id="iss-db-scan">
+		<section class="iss-db-scan rounded-xl border border-slate-200 bg-white p-6 shadow-sm <?php echo $has_key ? '' : 'pointer-events-none opacity-60'; ?>" id="iss-db-scan">
 			<h2 class="!m-0 !mb-1 !text-lg !font-semibold !text-slate-800"><?php esc_html_e( 'Database scan', 'integrum-security-scanner' ); ?></h2>
 			<p class="!m-0 !mb-4 text-sm text-slate-500">
 				<?php esc_html_e( 'Selected database content (posts, options, post meta) is sent to Imunify Connect (CloudLinux) for malware analysis. File-scan quota is separate from database-scan quota.', 'integrum-security-scanner' ); ?>
@@ -379,9 +388,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 				<p class="iss-db-results__empty !m-0 !mt-2 text-sm text-slate-500 hidden"></p>
 			</div>
 
-			<?php if ( null !== $notice && 'db_scan' === $notice['scope'] ) : ?>
-				<?php require INTEGRUM_SECURITY_SCANNER_DIR . 'src/Views/notice.php'; ?>
-			<?php endif; ?>
+			<?php $iss_render_notice( $notice, 'db_scan' ); ?>
 		</section>
 
 		<section class="iss-history rounded-xl border border-slate-200 bg-white p-6 shadow-sm">

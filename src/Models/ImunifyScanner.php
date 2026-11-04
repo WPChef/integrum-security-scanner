@@ -578,46 +578,14 @@ final class ImunifyScanner implements \Integrum\SecurityScanner\Contracts\Scanne
 	/**
 	 * Builds a ScanException for a 401/403 response.
 	 *
-	 * A 403 "quota_exceeded" is NOT an auth error: the key is valid, the plan
-	 * limit was reached. Surfacing it with code 401 would make the UI tell the
-	 * user to fetch a new key, which is wrong. We preserve the real API message
-	 * and use code 403 so the caller can distinguish the two cases.
-	 *
 	 * @param array{code: int, body: array<string, mixed>} $resp Decoded response.
-	 *
-	 * @return ScanException Ready to throw.
 	 */
 	private function auth_error( array $resp ): ScanException {
-		$http_code = (int) $resp['code'];
-		$body      = is_array( $resp['body'] ?? null ) ? $resp['body'] : array();
-		$api_code  = (string) ( $body['code'] ?? '' );
-		$message   = (string) ( $body['error'] ?? '' );
-
-		// Quota / rate-limit: the key is valid, the limit was hit. The wording
-		// is ours, not the API's: the raw "Scan quota exceeded" reads like a
-		// technical failure, so the user gets the plan explanation instead.
-		if ( 403 === $http_code && 'quota_exceeded' === $api_code ) {
-			$msg   = __( "You've used all your scans on the free plan.", 'integrum-security-scanner' );
-			$quota = is_array( $body['quota'] ?? null ) ? $body['quota'] : array();
-			// The free plan resets monthly; fall back to 30 days when the API
-			// omits the reset interval so the message keeps its full wording.
-			$resets = (int) ( $quota['resets_in'] ?? 0 );
-			$days   = $resets > 0 ? max( 1, (int) round( $resets / 86400 ) ) : 30;
-			$msg   .= ' ' . sprintf(
-				/* translators: %d: number of days until the scan quota resets. */
-				_n( 'You can scan again in %d day.', 'You can scan again in %d days.', $days, 'integrum-security-scanner' ),
-				$days
-			);
-			return new ScanException( $msg, 403 );
-		}
-
-		if ( '' === $message ) {
-			$message = 401 === $http_code
-				? __( 'Invalid site key.', 'integrum-security-scanner' )
-				: __( 'Scanner rejected the request.', 'integrum-security-scanner' );
-		}
-
-		return new ScanException( $message, 401 === $http_code ? 401 : 403 );
+		return ImunifyHttpErrors::auth_or_quota(
+			$resp,
+			__( "You've used all your scans on the free plan.", 'integrum-security-scanner' ),
+			__( 'Scanner rejected the request.', 'integrum-security-scanner' )
+		);
 	}
 
 	/**
