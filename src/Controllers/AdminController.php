@@ -10,6 +10,7 @@ declare( strict_types = 1 );
 namespace Integrum\SecurityScanner\Controllers;
 
 use Integrum\SecurityScanner\Contracts\CredentialStorageInterface;
+use Integrum\SecurityScanner\Contracts\DbScannerInterface;
 use Integrum\SecurityScanner\Contracts\FileCollectorInterface;
 use Integrum\SecurityScanner\Contracts\LoggerInterface;
 use Integrum\SecurityScanner\Contracts\ScanException;
@@ -27,6 +28,7 @@ final class AdminController {
 	private const SLUG            = 'integrum-security-scanner';
 	private const NONCE_GET_KEY   = 'integrum_security_scanner_get_key';
 	private const NONCE_START     = 'integrum_security_scanner_start_scan';
+	private const NONCE_START_DB  = 'integrum_security_scanner_start_db_scan';
 	private const NONCE_POLL      = 'integrum_security_scanner_poll';
 	private const CAPABILITY      = 'manage_options';
 	private const OPTION_SETTINGS = 'integrum_security_scanner_scan_settings';
@@ -47,6 +49,7 @@ final class AdminController {
 	 * @param LoggerInterface            $logger   Logger.
 	 * @param FileCollectorInterface     $file_collector Candidate file list builder (scan preview).
 	 * @param ScanHistoryStorage|null    $history  Finished-run history (defaults to a new store).
+	 * @param DbScannerInterface|null    $db_scanner Database scanner (Phase 1).
 	 */
 	public function __construct(
 		private ScannerInterface $scanner,
@@ -54,7 +57,8 @@ final class AdminController {
 		private LicensingService $licensing,
 		private LoggerInterface $logger,
 		private FileCollectorInterface $file_collector,
-		private ?ScanHistoryStorage $history = null
+		private ?ScanHistoryStorage $history = null,
+		private ?DbScannerInterface $db_scanner = null
 	) {
 		$this->history = $this->history ?? new ScanHistoryStorage();
 	}
@@ -73,6 +77,9 @@ final class AdminController {
 		add_action( 'wp_ajax_integrum_security_scanner_preview', array( $this, 'ajax_preview' ) );
 		add_action( 'wp_ajax_integrum_security_scanner_dirchildren', array( $this, 'ajax_dirchildren' ) );
 		add_action( 'wp_ajax_integrum_security_scanner_history', array( $this, 'ajax_history' ) );
+		add_action( 'wp_ajax_integrum_security_scanner_db_status', array( $this, 'ajax_db_status' ) );
+		add_action( 'wp_ajax_integrum_security_scanner_db_stop', array( $this, 'ajax_db_stop' ) );
+		add_action( 'wp_ajax_integrum_security_scanner_db_results', array( $this, 'ajax_db_results' ) );
 	}
 
 	/**
@@ -144,6 +151,10 @@ final class AdminController {
 				'hasKey'  => $this->storage->get_site_key() ? '1' : '0',
 				'i18n'    => array(
 					'error'          => __( 'Scan failed. Please try again.', 'integrum-security-scanner' ),
+					'dbError'        => __( 'Database scan failed. Please try again.', 'integrum-security-scanner' ),
+					'dbCompleted'    => __( 'Database scan completed.', 'integrum-security-scanner' ),
+					'dbStopped'      => __( 'Database scan stopped.', 'integrum-security-scanner' ),
+					'dbNoFindings'   => __( 'No database threats detected.', 'integrum-security-scanner' ),
 					'saveKey'        => __( 'Save key', 'integrum-security-scanner' ),
 					'register'       => __( 'Register', 'integrum-security-scanner' ),
 					'showKey'        => __( 'Show site key', 'integrum-security-scanner' ),
@@ -211,7 +222,66 @@ final class AdminController {
 			case 'start_scan':
 				$this->handle_start_scan();
 				break;
+			case 'start_db_scan':
+				$this->handle_start_db_scan();
+				break;
 		}
+	}
+
+	/**
+	 * Starts an Imunify database scan job.
+	 */
+	private function handle_start_db_scan(): void {
+		check_admin_referer( self::NONCE_START_DB );
+
+		if ( null === $this->db_scanner ) {
+			$this->redirect(
+				array(
+					'type'    => 'error',
+					'message' => __( 'Database scanner is not available.', 'integrum-security-scanner' ),
+					'scope'   => 'db_scan',
+				)
+			);
+			return;
+		}
+
+		try {
+			$job_id = $this->db_scanner->start();
+		} catch ( ScanException $e ) {
+			$this->logger->error(
+				'db scan start failed',
+				array(
+					'message' => $e->getMessage(),
+					'code'    => $e->getCode(),
+				)
+			);
+
+			$is_key_error = 401 === $e->getCode();
+			$real_message = $e->getMessage();
+			$message      = $is_key_error
+				? __( 'The site key is missing or was rejected. Use the Connection form above to obtain a new key, then start the database scan again.', 'integrum-security-scanner' )
+				: ( '' !== $real_message ? $real_message : __( 'Could not start the database scan. Please try again in a moment.', 'integrum-security-scanner' ) );
+
+			$this->redirect(
+				array(
+					'type'    => 'error',
+					'message' => $message,
+					'scope'   => 'db_scan',
+				)
+			);
+			return;
+		}
+
+		set_transient( 'integrum_security_scanner_db_active_job', $job_id, HOUR_IN_SECONDS );
+		set_transient( 'integrum_security_scanner_db_started_job', $job_id, 5 * MINUTE_IN_SECONDS );
+
+		$this->redirect(
+			array(
+				'type'    => 'success',
+				'message' => __( 'Database scan started. Keep this page open until it completes.', 'integrum-security-scanner' ),
+				'scope'   => 'db_scan',
+			)
+		);
 	}
 
 	/**
@@ -509,6 +579,114 @@ final class AdminController {
 	}
 
 	/**
+	 * AJAX: advances a database scan job (submit next batch / finalise).
+	 */
+	public function ajax_db_status(): void {
+		check_ajax_referer( self::NONCE_POLL, 'nonce' );
+
+		if ( ! current_user_can( self::CAPABILITY ) ) {
+			wp_send_json_error( array( 'message' => 'forbidden' ), 403 );
+		}
+
+		if ( null === $this->db_scanner ) {
+			wp_send_json_error( array( 'message' => 'unavailable' ) );
+		}
+
+		$job_id = $this->resolve_db_job_id();
+		if ( '' === $job_id ) {
+			wp_send_json_error( array( 'message' => 'no job' ) );
+		}
+
+		try {
+			$status = $this->db_scanner->tick( $job_id );
+		} catch ( ScanException $e ) {
+			delete_transient( 'integrum_security_scanner_db_active_job' );
+			wp_send_json_error( array( 'message' => $e->getMessage() ) );
+		}
+
+		if ( in_array( $status['status'], array( 'completed', 'failed', 'stopped' ), true ) ) {
+			delete_transient( 'integrum_security_scanner_db_active_job' );
+		}
+
+		wp_send_json_success(
+			array(
+				'job_id'       => $job_id,
+				'status'       => $status['status'],
+				'progress_pct' => (int) ( $status['progress_pct'] ?? 0 ),
+				'message'      => (string) ( $status['message'] ?? '' ),
+			)
+		);
+	}
+
+	/**
+	 * AJAX: stops local DB scan submission.
+	 */
+	public function ajax_db_stop(): void {
+		check_ajax_referer( self::NONCE_POLL, 'nonce' );
+
+		if ( ! current_user_can( self::CAPABILITY ) ) {
+			wp_send_json_error( array( 'message' => 'forbidden' ), 403 );
+		}
+
+		if ( null === $this->db_scanner ) {
+			wp_send_json_error( array( 'message' => 'unavailable' ) );
+		}
+
+		$job_id = $this->resolve_db_job_id();
+		if ( '' !== $job_id ) {
+			$this->db_scanner->stop( $job_id );
+		}
+		delete_transient( 'integrum_security_scanner_db_active_job' );
+		delete_transient( 'integrum_security_scanner_db_started_job' );
+
+		wp_send_json_success( array( 'status' => 'stopped' ) );
+	}
+
+	/**
+	 * AJAX: returns database scan findings.
+	 */
+	public function ajax_db_results(): void {
+		check_ajax_referer( self::NONCE_POLL, 'nonce' );
+
+		if ( ! current_user_can( self::CAPABILITY ) ) {
+			wp_send_json_error( array( 'message' => 'forbidden' ), 403 );
+		}
+
+		if ( null === $this->db_scanner ) {
+			wp_send_json_error( array( 'message' => 'unavailable' ) );
+		}
+
+		$job_id = $this->resolve_db_job_id();
+		if ( '' === $job_id ) {
+			wp_send_json_error( array( 'message' => 'no job' ) );
+		}
+
+		try {
+			$findings = $this->db_scanner->get_results( $job_id );
+		} catch ( ScanException $e ) {
+			wp_send_json_error( array( 'message' => $e->getMessage() ) );
+		}
+
+		$rows = array();
+		foreach ( $findings as $finding ) {
+			$rows[] = $finding->to_array();
+		}
+
+		wp_send_json_success( array( 'results' => $rows ) );
+	}
+
+	/**
+	 * Resolves the active DB job id from POST or transient.
+	 */
+	private function resolve_db_job_id(): string {
+		if ( isset( $_POST['job_id'] ) ) {
+			return sanitize_text_field( wp_unslash( $_POST['job_id'] ) );
+		}
+		$cached = get_transient( 'integrum_security_scanner_db_active_job' );
+		return false !== $cached ? (string) $cached : '';
+	}
+
+	/**
 	 * AJAX: returns the child directories of a tree node (lazy loading).
 	 */
 	public function ajax_dirchildren(): void {
@@ -582,6 +760,7 @@ final class AdminController {
 		// server-side while the original tab polls; a reload simply returns the
 		// UI to idle rather than silently continuing.
 		$job_id      = $this->consume_started_job();
+		$db_job_id   = $this->consume_db_started_job();
 		$notice      = $this->consume_notice();
 		$dir_options = $this->directory_options();
 		$settings    = $this->load_scan_settings();
@@ -1099,6 +1278,20 @@ final class AdminController {
 	}
 
 	/**
+	 * One-shot DB job id after start_db_scan PRG (same semantics as file scan).
+	 *
+	 * @return string Job id or ''.
+	 */
+	private function consume_db_started_job(): string {
+		$job_id = get_transient( 'integrum_security_scanner_db_started_job' );
+		if ( false !== $job_id ) {
+			delete_transient( 'integrum_security_scanner_db_started_job' );
+			return (string) $job_id;
+		}
+		return '';
+	}
+
+	/**
 	 * Pops the one-shot transient notice for inline display on the plugin page.
 	 *
 	 * Rendered inline in the page view (under the relevant section) rather than
@@ -1133,6 +1326,7 @@ final class AdminController {
 		$allowed_scopes = array(
 			'connection' => true,
 			'scan'       => true,
+			'db_scan'    => true,
 		);
 		$scope          = isset( $notice['scope'], $allowed_scopes[ $notice['scope'] ] ) ? $notice['scope'] : 'connection';
 

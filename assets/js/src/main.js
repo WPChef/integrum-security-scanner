@@ -9,7 +9,7 @@ import { initPreview } from './preview.js';
 import { initPolling } from './status.js';
 import { initResultsFilter } from './results.js';
 import { initNotices } from './notices.js';
-import { refreshHistory } from './history.js';
+import { initDbPolling } from './dbScan.js';
 
 initKeyForm();
 initStopScan();
@@ -35,4 +35,9 @@ if ( jobIdInput && jobIdInput.value ) {
 } else {
 	// No active scan: surface any pending form notice instead.
 	initNotices();
+}
+
+const dbJobIdInput = document.querySelector( '.iss-db-job-id' );
+if ( dbJobIdInput && dbJobIdInput.value ) {
+	initDbPolling( dbJobIdInput.value );
 }

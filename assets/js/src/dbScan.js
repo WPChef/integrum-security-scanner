@@ -1,0 +1,194 @@
+/**
+ * Database scan: poll ticks, stop, render findings table.
+ */
+import { CFG } from './config.js';
+import { fetchJSON } from './ajax.js';
+import { revealIntoView } from './viewport.js';
+
+const TICK_MS = 1500;
+
+/**
+ * Starts DB scan polling for a job started via the form PRG redirect.
+ *
+ * @param {string} jobId Remote Imunify DB job id.
+ */
+export function initDbPolling( jobId ) {
+	const section = document.querySelector( '#iss-db-scan' );
+	if ( ! section || ! jobId ) {
+		return;
+	}
+
+	const progressWrap = section.querySelector( '.iss-db-progress' );
+	const bar = section.querySelector( '.iss-db-progress__bar' );
+	const pctEl = section.querySelector( '.iss-db-progress__pct' );
+	const label = section.querySelector( '.iss-db-progress__label' );
+	const startBtn = section.querySelector( '.iss-db-scan__start' );
+	const stopBtn = section.querySelector( '.iss-db-scan__stop' );
+	const resultsWrap = section.querySelector( '.iss-db-results' );
+	const tbody = section.querySelector( '.iss-db-results__body' );
+	const emptyEl = section.querySelector( '.iss-db-results__empty' );
+
+	if ( progressWrap ) {
+		progressWrap.classList.remove( 'hidden' );
+		revealIntoView( progressWrap );
+	}
+	if ( startBtn ) {
+		startBtn.disabled = true;
+	}
+	if ( stopBtn ) {
+		stopBtn.disabled = false;
+	}
+
+	let timer = null;
+	let stopped = false;
+
+	function setProgress( pct ) {
+		const n = Math.max( 0, Math.min( 100, Number( pct ) || 0 ) );
+		if ( bar ) {
+			bar.style.width = n + '%';
+		}
+		if ( pctEl ) {
+			pctEl.textContent = n + '%';
+		}
+	}
+
+	function finishUi( ok ) {
+		if ( timer ) {
+			clearInterval( timer );
+			timer = null;
+		}
+		if ( startBtn ) {
+			startBtn.disabled = false;
+		}
+		if ( stopBtn ) {
+			stopBtn.disabled = true;
+		}
+		if ( label && ok ) {
+			label.textContent = ( CFG.i18n && CFG.i18n.dbCompleted ) || 'Database scan completed.';
+		}
+		setProgress( 100 );
+	}
+
+	function renderFindings( rows ) {
+		if ( ! resultsWrap || ! tbody ) {
+			return;
+		}
+		resultsWrap.classList.remove( 'hidden' );
+		tbody.innerHTML = '';
+
+		if ( ! rows || ! rows.length ) {
+			if ( emptyEl ) {
+				emptyEl.classList.remove( 'hidden' );
+				emptyEl.textContent = ( CFG.i18n && CFG.i18n.dbNoFindings ) || 'No database threats detected.';
+			}
+			return;
+		}
+
+		if ( emptyEl ) {
+			emptyEl.classList.add( 'hidden' );
+		}
+
+		rows.forEach( function ( row ) {
+			const tr = document.createElement( 'tr' );
+			const sev = document.createElement( 'td' );
+			sev.className = 'border-b border-slate-100 py-2 pr-3';
+			sev.textContent = row.severity || '';
+
+			const loc = document.createElement( 'td' );
+			loc.className = 'border-b border-slate-100 py-2 pr-3';
+			if ( row.edit_url ) {
+				const a = document.createElement( 'a' );
+				a.href = row.edit_url;
+				a.textContent = row.label || row.row_id;
+				a.className = 'text-primary-700 underline';
+				loc.appendChild( a );
+			} else {
+				loc.textContent = row.label || ( row.table + ' #' + row.row_id );
+			}
+
+			const sig = document.createElement( 'td' );
+			sig.className = 'border-b border-slate-100 py-2 font-mono text-xs';
+			sig.textContent = row.signature_id || '';
+
+			tr.appendChild( sev );
+			tr.appendChild( loc );
+			tr.appendChild( sig );
+			tbody.appendChild( tr );
+		} );
+	}
+
+	function loadResults() {
+		return fetchJSON( 'integrum_security_scanner_db_results', { job_id: jobId } ).then( function ( payload ) {
+			if ( payload && payload.success && payload.data && payload.data.results ) {
+				renderFindings( payload.data.results );
+			} else {
+				renderFindings( [] );
+			}
+		} );
+	}
+
+	function onTick( payload ) {
+		if ( stopped ) {
+			return;
+		}
+		if ( ! payload || ! payload.success ) {
+			if ( label ) {
+				label.textContent =
+					( payload && payload.data && payload.data.message ) ||
+					( CFG.i18n && CFG.i18n.dbError ) ||
+					'error';
+			}
+			finishUi( false );
+			return;
+		}
+
+		const data = payload.data || {};
+		setProgress( data.progress_pct );
+
+		if ( data.status === 'completed' ) {
+			finishUi( true );
+			loadResults();
+			return;
+		}
+
+		if ( data.status === 'failed' || data.status === 'stopped' ) {
+			if ( label ) {
+				label.textContent =
+					data.message ||
+					( data.status === 'stopped'
+						? ( CFG.i18n && CFG.i18n.dbStopped ) || 'stopped'
+						: ( CFG.i18n && CFG.i18n.dbError ) || 'error' );
+			}
+			finishUi( false );
+			if ( data.status === 'failed' ) {
+				loadResults();
+			}
+		}
+	}
+
+	function tick() {
+		fetchJSON( 'integrum_security_scanner_db_status', { job_id: jobId } )
+			.then( onTick )
+			.catch( function () {
+				if ( label ) {
+					label.textContent = ( CFG.i18n && CFG.i18n.dbError ) || 'error';
+				}
+				finishUi( false );
+			} );
+	}
+
+	if ( stopBtn ) {
+		stopBtn.addEventListener( 'click', function () {
+			stopped = true;
+			fetchJSON( 'integrum_security_scanner_db_stop', { job_id: jobId } ).finally( function () {
+				if ( label ) {
+					label.textContent = ( CFG.i18n && CFG.i18n.dbStopped ) || 'stopped';
+				}
+				finishUi( false );
+			} );
+		} );
+	}
+
+	tick();
+	timer = setInterval( tick, TICK_MS );
+}
