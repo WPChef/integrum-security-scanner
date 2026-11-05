@@ -8,6 +8,26 @@ import { revealIntoView } from './viewport.js';
 const TICK_MS = 1500;
 
 /**
+ * Stage → localized label for honest progress copy.
+ *
+ * @param {string} stage
+ * @returns {string}
+ */
+function stageLabel( stage ) {
+	const i18n = CFG.i18n || {};
+	if ( stage === 'options' ) {
+		return i18n.dbStageOptions || 'Scanning options…';
+	}
+	if ( stage === 'postmeta' ) {
+		return i18n.dbStagePostmeta || 'Scanning post meta…';
+	}
+	if ( stage === 'posts' ) {
+		return i18n.dbStagePosts || 'Scanning posts…';
+	}
+	return i18n.dbStagePosts || 'Scanning database…';
+}
+
+/**
  * Starts DB scan polling for a job started via the form PRG redirect.
  *
  * @param {string} jobId Remote Imunify DB job id.
@@ -27,6 +47,7 @@ export function initDbPolling( jobId ) {
 	const resultsWrap = section.querySelector( '.iss-db-results' );
 	const tbody = section.querySelector( '.iss-db-results__body' );
 	const emptyEl = section.querySelector( '.iss-db-results__empty' );
+	const truncEl = section.querySelector( '.iss-db-results__truncated' );
 
 	if ( progressWrap ) {
 		progressWrap.classList.remove( 'hidden' );
@@ -69,12 +90,24 @@ export function initDbPolling( jobId ) {
 		setProgress( 100 );
 	}
 
-	function renderFindings( rows ) {
+	function renderFindings( rows, truncated ) {
 		if ( ! resultsWrap || ! tbody ) {
 			return;
 		}
 		resultsWrap.classList.remove( 'hidden' );
 		tbody.innerHTML = '';
+
+		if ( truncEl ) {
+			if ( truncated ) {
+				truncEl.classList.remove( 'hidden' );
+				truncEl.textContent =
+					( CFG.i18n && CFG.i18n.dbTruncated ) ||
+					'Showing the first 500 findings.';
+			} else {
+				truncEl.classList.add( 'hidden' );
+				truncEl.textContent = '';
+			}
+		}
 
 		if ( ! rows || ! rows.length ) {
 			if ( emptyEl ) {
@@ -119,10 +152,10 @@ export function initDbPolling( jobId ) {
 
 	function loadResults() {
 		return fetchJSON( 'integrum_security_scanner_db_results', { job_id: jobId } ).then( function ( payload ) {
-			if ( payload && payload.success && payload.data && payload.data.results ) {
-				renderFindings( payload.data.results );
+			if ( payload && payload.success && payload.data ) {
+				renderFindings( payload.data.results || [], !! payload.data.truncated );
 			} else {
-				renderFindings( [] );
+				renderFindings( [], false );
 			}
 		} );
 	}
@@ -144,10 +177,17 @@ export function initDbPolling( jobId ) {
 
 		const data = payload.data || {};
 		setProgress( data.progress_pct );
+		if ( label && data.status === 'running' && data.stage ) {
+			label.textContent = stageLabel( data.stage ) + ' ' + ( Number( data.progress_pct ) || 0 ) + '%';
+		}
 
 		if ( data.status === 'completed' ) {
 			finishUi( true );
-			loadResults();
+			if ( data.results ) {
+				renderFindings( data.results, !! data.truncated );
+			} else {
+				loadResults();
+			}
 			return;
 		}
 
@@ -161,7 +201,11 @@ export function initDbPolling( jobId ) {
 			}
 			finishUi( false );
 			if ( data.status === 'failed' ) {
-				loadResults();
+				if ( data.results ) {
+					renderFindings( data.results, !! data.truncated );
+				} else {
+					loadResults();
+				}
 			}
 		}
 	}
@@ -191,4 +235,77 @@ export function initDbPolling( jobId ) {
 
 	tick();
 	timer = setInterval( tick, TICK_MS );
+}
+
+/**
+ * After reload, re-fetch findings for the last completed DB job (no polling).
+ *
+ * @param {string} jobId
+ */
+export function initDbResultsHydration( jobId ) {
+	const section = document.querySelector( '#iss-db-scan' );
+	if ( ! section || ! jobId ) {
+		return;
+	}
+	const resultsWrap = section.querySelector( '.iss-db-results' );
+	const tbody = section.querySelector( '.iss-db-results__body' );
+	const emptyEl = section.querySelector( '.iss-db-results__empty' );
+	const truncEl = section.querySelector( '.iss-db-results__truncated' );
+	if ( ! resultsWrap || ! tbody ) {
+		return;
+	}
+
+	fetchJSON( 'integrum_security_scanner_db_results', { job_id: jobId } ).then( function ( payload ) {
+		if ( ! payload || ! payload.success || ! payload.data ) {
+			return;
+		}
+		const rows = payload.data.results || [];
+		const truncated = !! payload.data.truncated;
+		resultsWrap.classList.remove( 'hidden' );
+		tbody.innerHTML = '';
+		if ( truncEl ) {
+			if ( truncated ) {
+				truncEl.classList.remove( 'hidden' );
+				truncEl.textContent =
+					( CFG.i18n && CFG.i18n.dbTruncated ) ||
+					'Showing the first 500 findings.';
+			} else {
+				truncEl.classList.add( 'hidden' );
+			}
+		}
+		if ( ! rows.length ) {
+			if ( emptyEl ) {
+				emptyEl.classList.remove( 'hidden' );
+				emptyEl.textContent = ( CFG.i18n && CFG.i18n.dbNoFindings ) || 'No database threats detected.';
+			}
+			return;
+		}
+		if ( emptyEl ) {
+			emptyEl.classList.add( 'hidden' );
+		}
+		rows.forEach( function ( row ) {
+			const tr = document.createElement( 'tr' );
+			const sev = document.createElement( 'td' );
+			sev.className = 'border-b border-slate-100 py-2 pr-3';
+			sev.textContent = row.severity || '';
+			const loc = document.createElement( 'td' );
+			loc.className = 'border-b border-slate-100 py-2 pr-3';
+			if ( row.edit_url ) {
+				const a = document.createElement( 'a' );
+				a.href = row.edit_url;
+				a.textContent = row.label || row.row_id;
+				a.className = 'text-primary-700 underline';
+				loc.appendChild( a );
+			} else {
+				loc.textContent = row.label || ( row.table + ' #' + row.row_id );
+			}
+			const sig = document.createElement( 'td' );
+			sig.className = 'border-b border-slate-100 py-2 font-mono text-xs';
+			sig.textContent = row.signature_id || '';
+			tr.appendChild( sev );
+			tr.appendChild( loc );
+			tr.appendChild( sig );
+			tbody.appendChild( tr );
+		} );
+	} );
 }

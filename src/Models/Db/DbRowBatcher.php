@@ -92,7 +92,51 @@ final class DbRowBatcher {
 	}
 
 	/**
-	 * Whether raw cell content matches any SQL LIKE-style prescan pattern.
+	 * Rough COUNT(*) of in-scope candidate rows (same filters as fetch_*).
+	 *
+	 * Used only for progress_pct; not a guarantee of submitted volume after
+	 * local prescan filtering.
+	 *
+	 * @return array{posts: int, options: int, postmeta: int, total: int}
+	 */
+	public function estimate_scope(): array {
+		$statuses = "'" . implode( "','", array_map( 'esc_sql', self::POST_STATUSES ) ) . "'";
+		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- status list is fixed allowlist.
+		$posts = (int) $this->wpdb->get_var(
+			"SELECT COUNT(*) FROM {$this->wpdb->posts} WHERE post_status IN ($statuses)"
+		);
+		$options = (int) $this->wpdb->get_var(
+			$this->wpdb->prepare(
+				"SELECT COUNT(*) FROM {$this->wpdb->options}
+				WHERE option_name NOT IN ('cron')
+				AND option_name NOT LIKE %s
+				AND option_name NOT LIKE %s",
+				$this->wpdb->esc_like( '_transient_' ) . '%',
+				$this->wpdb->esc_like( '_site_transient_' ) . '%'
+			)
+		);
+		$postmeta = (int) $this->wpdb->get_var(
+			"SELECT COUNT(*) FROM {$this->wpdb->postmeta}"
+		);
+
+		$posts    = max( 0, $posts );
+		$options  = max( 0, $options );
+		$postmeta = max( 0, $postmeta );
+
+		return array(
+			'posts'    => $posts,
+			'options'  => $options,
+			'postmeta' => $postmeta,
+			'total'    => $posts + $options + $postmeta,
+		);
+	}
+
+	/**
+	 * Phase 1 local volume filter: strip `%` from Connect LIKE patterns and
+	 * match with case-insensitive substring search. This is NOT full SQL LIKE
+	 * (`_`, escapes, collation). Server-side scanning still applies to every
+	 * submitted row; `scan_config.base64_pattern` is intentionally unused here
+	 * (deferred — would need SQL-side filtering beyond this PHP pass).
 	 *
 	 * @param string   $raw      Raw cell value.
 	 * @param string[] $patterns Patterns like %&lt;script%.
@@ -124,7 +168,7 @@ final class DbRowBatcher {
 	 * @param int      $batch_size       Max candidate rows to read from DB.
 	 * @param string[] $prescan_patterns LIKE patterns from scan_config.
 	 * @param int      $size_limit       Max raw cell length (bytes).
-	 * @return array{rows: list<array{table: string, column: string, row_id: string, content: string}>, cursor: Cursor, exhausted: bool}
+	 * @return array{rows: list<array{table: string, column: string, row_id: string, content: string}>, cursor: Cursor, exhausted: bool, examined: int, stage: string}
 	 */
 	public function next_batch(
 		array $cursor,
@@ -145,6 +189,8 @@ final class DbRowBatcher {
 					'last_id' => 0,
 				),
 				'exhausted' => true,
+				'examined'  => 0,
+				'stage'     => 'done',
 			);
 		}
 
@@ -154,6 +200,7 @@ final class DbRowBatcher {
 			'postmeta' => $this->fetch_postmeta( $last_id, $batch_size ),
 			default    => array(),
 		};
+		$examined = count( $rows );
 
 		$out = array();
 		foreach ( $rows as $row ) {
@@ -178,6 +225,8 @@ final class DbRowBatcher {
 				'rows'      => $out,
 				'cursor'    => $next,
 				'exhausted' => 'done' === $next['stage'],
+				'examined'  => $examined,
+				'stage'     => $stage,
 			);
 		}
 
@@ -190,6 +239,8 @@ final class DbRowBatcher {
 				'last_id' => $new_last,
 			),
 			'exhausted' => false,
+			'examined'  => $examined,
+			'stage'     => $stage,
 		);
 	}
 

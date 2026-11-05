@@ -9,7 +9,7 @@ import { initPreview } from './preview.js';
 import { initPolling } from './status.js';
 import { initResultsFilter } from './results.js';
 import { initNotices } from './notices.js';
-import { initDbPolling } from './dbScan.js';
+import { initDbPolling, initDbResultsHydration } from './dbScan.js';
 
 initKeyForm();
 initStopScan();
@@ -40,4 +40,9 @@ if ( jobIdInput && jobIdInput.value ) {
 const dbJobIdInput = document.querySelector( '.iss-db-job-id' );
 if ( dbJobIdInput && dbJobIdInput.value ) {
 	initDbPolling( dbJobIdInput.value );
+} else {
+	const dbLast = document.querySelector( '.iss-db-last-job-id' );
+	if ( dbLast && dbLast.value ) {
+		initDbResultsHydration( dbLast.value );
+	}
 }

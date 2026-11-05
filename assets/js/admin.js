@@ -1,8 +1,8 @@
 (() => {
-  // assets/js/src/config.js
-  var CFG = window.llarSecurityScanner || {};
+  // wp-content/plugins/integrum-security-scanner/assets/js/src/config.js
+  const CFG = window.llarSecurityScanner || {};
 
-  // assets/js/src/keyForm.js
+  // wp-content/plugins/integrum-security-scanner/assets/js/src/keyForm.js
   function initKeyForm() {
     const keyField = document.getElementById("iss-key");
     const form = keyField && keyField.closest("form");
@@ -88,7 +88,7 @@
     });
   }
 
-  // assets/js/src/ajax.js
+  // wp-content/plugins/integrum-security-scanner/assets/js/src/ajax.js
   function fetchJSON(action, body) {
     const data = new URLSearchParams();
     data.append("action", action);
@@ -113,7 +113,7 @@
     });
   }
 
-  // assets/js/src/viewport.js
+  // wp-content/plugins/integrum-security-scanner/assets/js/src/viewport.js
   function scrollIntoView(el) {
     if (!el) {
       return;
@@ -128,12 +128,12 @@
     scrollIntoView(target || section);
   }
 
-  // assets/js/src/dirTree.js
-  var dirTreeEl = document.querySelector(".iss-dirtree");
-  var treeFlags = {};
-  var dirTreeLocked = false;
-  var registerRowRef = null;
-  var syncAllRef = null;
+  // wp-content/plugins/integrum-security-scanner/assets/js/src/dirTree.js
+  const dirTreeEl = document.querySelector(".iss-dirtree");
+  let treeFlags = {};
+  let dirTreeLocked = false;
+  let registerRowRef = null;
+  let syncAllRef = null;
   if (dirTreeEl) {
     try {
       treeFlags = JSON.parse(dirTreeEl.getAttribute("data-flags") || "{}") || {};
@@ -412,7 +412,7 @@
     return window.CSS && CSS.escape ? CSS.escape(value) : value.replace(/"/g, '\\"');
   }
 
-  // assets/js/src/stopScan.js
+  // wp-content/plugins/integrum-security-scanner/assets/js/src/stopScan.js
   function initStopScan() {
     const stopBtn = document.querySelector(".iss-scan-actions__stop");
     if (!stopBtn) {
@@ -456,7 +456,7 @@
     });
   }
 
-  // assets/js/src/startForm.js
+  // wp-content/plugins/integrum-security-scanner/assets/js/src/startForm.js
   function initStartForm() {
     const startForm = document.querySelector(".iss-start-form");
     const startBtn = document.querySelector(".iss-scan-actions__start");
@@ -470,7 +470,7 @@
     });
   }
 
-  // assets/js/src/fileTree.js
+  // wp-content/plugins/integrum-security-scanner/assets/js/src/fileTree.js
   function renderFile(row) {
     const li = document.createElement("li");
     li.className = "iss-tree__file" + fileStatusClass(row);
@@ -559,10 +559,10 @@
     return "clean" !== row.status ? " is-suspicious" : " is-clean";
   }
 
-  // assets/js/src/results.js
-  var treeEl = document.querySelector(".iss-dirtree");
-  var filterWrap = document.getElementById("iss-only-suspicious-wrap");
-  var onlySuspicious = document.getElementById("iss-only-suspicious");
+  // wp-content/plugins/integrum-security-scanner/assets/js/src/results.js
+  const treeEl = document.querySelector(".iss-dirtree");
+  const filterWrap = document.getElementById("iss-only-suspicious-wrap");
+  const onlySuspicious = document.getElementById("iss-only-suspicious");
   function loadResults(jobId) {
     return fetchJSON("integrum_security_scanner_results", { job_id: jobId }).then(function(payload) {
       const rows = payload && payload.data && payload.data.results || [];
@@ -711,7 +711,7 @@
     }
   }
 
-  // assets/js/src/preview.js
+  // wp-content/plugins/integrum-security-scanner/assets/js/src/preview.js
   function initPreview(treeApi2) {
     const previewCount = document.querySelector(".iss-preview__count");
     const previewEmpty = document.querySelector(".iss-preview__empty");
@@ -813,7 +813,7 @@
     return { schedule };
   }
 
-  // assets/js/src/format.js
+  // wp-content/plugins/integrum-security-scanner/assets/js/src/format.js
   function formatBytes(bytes) {
     if (bytes < 1024) {
       return bytes + " B";
@@ -839,11 +839,11 @@
     return h + "h " + (m > 0 ? m + "m" : "");
   }
 
-  // assets/js/src/history.js
-  var bodyEl = document.querySelector(".iss-history__body");
-  var emptyEl = document.querySelector(".iss-history__empty");
-  var runsCache = null;
-  var fetchPromise = null;
+  // wp-content/plugins/integrum-security-scanner/assets/js/src/history.js
+  const bodyEl = document.querySelector(".iss-history__body");
+  const emptyEl = document.querySelector(".iss-history__empty");
+  let runsCache = null;
+  let fetchPromise = null;
   function fetchRuns() {
     if (runsCache) {
       return Promise.resolve(runsCache);
@@ -991,9 +991,9 @@
     });
   }
 
-  // assets/js/src/status.js
-  var STATUS_INTERVAL_MS = 4e3;
-  var STATUSES_DONE = ["completed", "done", "failed"];
+  // wp-content/plugins/integrum-security-scanner/assets/js/src/status.js
+  const STATUS_INTERVAL_MS = 4e3;
+  const STATUSES_DONE = ["completed", "done", "failed"];
   function computeEta(window2, scanned, total) {
     if (total <= 0 || scanned <= 0 || window2.length < 2) {
       return null;
@@ -1117,7 +1117,7 @@
     pollStatus();
   }
 
-  // assets/js/src/notices.js
+  // wp-content/plugins/integrum-security-scanner/assets/js/src/notices.js
   function initNotices() {
     const notice = document.querySelector(".integrum-security-scanner-notice");
     if (!notice) {
@@ -1130,8 +1130,21 @@
     scrollIntoView(notice);
   }
 
-  // assets/js/src/dbScan.js
-  var TICK_MS = 1500;
+  // wp-content/plugins/integrum-security-scanner/assets/js/src/dbScan.js
+  const TICK_MS = 1500;
+  function stageLabel(stage) {
+    const i18n = CFG.i18n || {};
+    if (stage === "options") {
+      return i18n.dbStageOptions || "Scanning options\u2026";
+    }
+    if (stage === "postmeta") {
+      return i18n.dbStagePostmeta || "Scanning post meta\u2026";
+    }
+    if (stage === "posts") {
+      return i18n.dbStagePosts || "Scanning posts\u2026";
+    }
+    return i18n.dbStagePosts || "Scanning database\u2026";
+  }
   function initDbPolling(jobId) {
     const section = document.querySelector("#iss-db-scan");
     if (!section || !jobId) {
@@ -1146,6 +1159,7 @@
     const resultsWrap = section.querySelector(".iss-db-results");
     const tbody = section.querySelector(".iss-db-results__body");
     const emptyEl2 = section.querySelector(".iss-db-results__empty");
+    const truncEl = section.querySelector(".iss-db-results__truncated");
     if (progressWrap) {
       progressWrap.classList.remove("hidden");
       revealIntoView(progressWrap);
@@ -1183,12 +1197,21 @@
       }
       setProgress(100);
     }
-    function renderFindings(rows) {
+    function renderFindings(rows, truncated) {
       if (!resultsWrap || !tbody) {
         return;
       }
       resultsWrap.classList.remove("hidden");
       tbody.innerHTML = "";
+      if (truncEl) {
+        if (truncated) {
+          truncEl.classList.remove("hidden");
+          truncEl.textContent = CFG.i18n && CFG.i18n.dbTruncated || "Showing the first 500 findings.";
+        } else {
+          truncEl.classList.add("hidden");
+          truncEl.textContent = "";
+        }
+      }
       if (!rows || !rows.length) {
         if (emptyEl2) {
           emptyEl2.classList.remove("hidden");
@@ -1226,10 +1249,10 @@
     }
     function loadResults2() {
       return fetchJSON("integrum_security_scanner_db_results", { job_id: jobId }).then(function(payload) {
-        if (payload && payload.success && payload.data && payload.data.results) {
-          renderFindings(payload.data.results);
+        if (payload && payload.success && payload.data) {
+          renderFindings(payload.data.results || [], !!payload.data.truncated);
         } else {
-          renderFindings([]);
+          renderFindings([], false);
         }
       });
     }
@@ -1246,9 +1269,16 @@
       }
       const data = payload.data || {};
       setProgress(data.progress_pct);
+      if (label && data.status === "running" && data.stage) {
+        label.textContent = stageLabel(data.stage) + " " + (Number(data.progress_pct) || 0) + "%";
+      }
       if (data.status === "completed") {
         finishUi(true);
-        loadResults2();
+        if (data.results) {
+          renderFindings(data.results, !!data.truncated);
+        } else {
+          loadResults2();
+        }
         return;
       }
       if (data.status === "failed" || data.status === "stopped") {
@@ -1257,7 +1287,11 @@
         }
         finishUi(false);
         if (data.status === "failed") {
-          loadResults2();
+          if (data.results) {
+            renderFindings(data.results, !!data.truncated);
+          } else {
+            loadResults2();
+          }
         }
       }
     }
@@ -1283,27 +1317,96 @@
     tick();
     timer = setInterval(tick, TICK_MS);
   }
+  function initDbResultsHydration(jobId) {
+    const section = document.querySelector("#iss-db-scan");
+    if (!section || !jobId) {
+      return;
+    }
+    const resultsWrap = section.querySelector(".iss-db-results");
+    const tbody = section.querySelector(".iss-db-results__body");
+    const emptyEl2 = section.querySelector(".iss-db-results__empty");
+    const truncEl = section.querySelector(".iss-db-results__truncated");
+    if (!resultsWrap || !tbody) {
+      return;
+    }
+    fetchJSON("integrum_security_scanner_db_results", { job_id: jobId }).then(function(payload) {
+      if (!payload || !payload.success || !payload.data) {
+        return;
+      }
+      const rows = payload.data.results || [];
+      const truncated = !!payload.data.truncated;
+      resultsWrap.classList.remove("hidden");
+      tbody.innerHTML = "";
+      if (truncEl) {
+        if (truncated) {
+          truncEl.classList.remove("hidden");
+          truncEl.textContent = CFG.i18n && CFG.i18n.dbTruncated || "Showing the first 500 findings.";
+        } else {
+          truncEl.classList.add("hidden");
+        }
+      }
+      if (!rows.length) {
+        if (emptyEl2) {
+          emptyEl2.classList.remove("hidden");
+          emptyEl2.textContent = CFG.i18n && CFG.i18n.dbNoFindings || "No database threats detected.";
+        }
+        return;
+      }
+      if (emptyEl2) {
+        emptyEl2.classList.add("hidden");
+      }
+      rows.forEach(function(row) {
+        const tr = document.createElement("tr");
+        const sev = document.createElement("td");
+        sev.className = "border-b border-slate-100 py-2 pr-3";
+        sev.textContent = row.severity || "";
+        const loc = document.createElement("td");
+        loc.className = "border-b border-slate-100 py-2 pr-3";
+        if (row.edit_url) {
+          const a = document.createElement("a");
+          a.href = row.edit_url;
+          a.textContent = row.label || row.row_id;
+          a.className = "text-primary-700 underline";
+          loc.appendChild(a);
+        } else {
+          loc.textContent = row.label || row.table + " #" + row.row_id;
+        }
+        const sig = document.createElement("td");
+        sig.className = "border-b border-slate-100 py-2 font-mono text-xs";
+        sig.textContent = row.signature_id || "";
+        tr.appendChild(sev);
+        tr.appendChild(loc);
+        tr.appendChild(sig);
+        tbody.appendChild(tr);
+      });
+    });
+  }
 
-  // assets/js/src/main.js
+  // wp-content/plugins/integrum-security-scanner/assets/js/src/main.js
   initKeyForm();
   initStopScan();
   initStartForm();
-  var notifyPreview = function() {
+  let notifyPreview = function() {
   };
-  var treeApi = initDirTree(function() {
+  const treeApi = initDirTree(function() {
     notifyPreview();
   });
-  var previewApi = initPreview(treeApi);
+  const previewApi = initPreview(treeApi);
   notifyPreview = previewApi.schedule;
   initResultsFilter();
-  var jobIdInput = document.querySelector(".iss-job-id");
+  const jobIdInput = document.querySelector(".iss-job-id");
   if (jobIdInput && jobIdInput.value) {
     initPolling(jobIdInput.value);
   } else {
     initNotices();
   }
-  var dbJobIdInput = document.querySelector(".iss-db-job-id");
+  const dbJobIdInput = document.querySelector(".iss-db-job-id");
   if (dbJobIdInput && dbJobIdInput.value) {
     initDbPolling(dbJobIdInput.value);
+  } else {
+    const dbLast = document.querySelector(".iss-db-last-job-id");
+    if (dbLast && dbLast.value) {
+      initDbResultsHydration(dbLast.value);
+    }
   }
 })();

@@ -22,11 +22,13 @@ use Integrum\SecurityScanner\Models\ImunifyHttpErrors;
  */
 final class ImunifyDbScanner implements DbScannerInterface {
 
-	private const STATE_TTL        = HOUR_IN_SECONDS;
-	private const STATE_PREFIX     = 'integrum_security_scanner_db_';
-	private const TICK_BUDGET_SEC  = 2.5;
-	private const DEFAULT_BATCH    = DbRowBatcher::DEFAULT_BATCH_SIZE;
+	private const STATE_TTL         = HOUR_IN_SECONDS;
+	private const STATE_PREFIX      = 'integrum_security_scanner_db_';
+	private const TICK_BUDGET_SEC   = 2.5;
+	private const DEFAULT_BATCH     = DbRowBatcher::DEFAULT_BATCH_SIZE;
 	private const MAX_BATCH_RETRIES = 3;
+	private const RESULTS_CAP       = 500;
+	private const RETRY_AFTER_MAX_S = 30;
 
 	/**
 	 * @param HttpClientInterface        $http    HTTP client.
@@ -69,24 +71,30 @@ final class ImunifyDbScanner implements DbScannerInterface {
 			throw new ScanException( __( 'No job_id returned by database scanner.', 'integrum-security-scanner' ) );
 		}
 
-		$job_id     = (string) $body['job_id'];
+		$job_id      = (string) $body['job_id'];
 		$scan_config = is_array( $body['scan_config'] ?? null ) ? $body['scan_config'] : array();
 		$patterns    = is_array( $scan_config['prescan_patterns'] ?? null ) ? $scan_config['prescan_patterns'] : array();
 		$size_limit  = isset( $scan_config['size_limit'] ) ? max( 0, (int) $scan_config['size_limit'] ) : 665600;
+		// Phase 1: ignore scan_config.base64_pattern (needs SQL-side filter; substring
+		// pass only reduces volume — Connect still scans every submitted cell).
+		$scope = $this->batcher->estimate_scope();
 
 		$this->save_state(
 			$job_id,
 			array(
-				'cursor'            => $this->batcher->initial_cursor(),
-				'batch_size'        => self::DEFAULT_BATCH,
-				'prescan_patterns'  => $patterns,
-				'size_limit'        => $size_limit,
-				'accepted'          => 0,
-				'submitted'         => 0,
-				'finalized'         => false,
-				'stopped'           => false,
-				'status'            => 'running',
-				'progress_pct'      => 5,
+				'cursor'           => $this->batcher->initial_cursor(),
+				'batch_size'       => self::DEFAULT_BATCH,
+				'prescan_patterns' => $patterns,
+				'size_limit'       => $size_limit,
+				'scope_total'      => (int) ( $scope['total'] ?? 0 ),
+				'examined'         => 0,
+				'accepted'         => 0,
+				'submitted'        => 0,
+				'finalized'        => false,
+				'stopped'          => false,
+				'status'           => 'running',
+				'stage'            => 'posts',
+				'progress_pct'     => 0,
 			)
 		);
 
@@ -99,13 +107,16 @@ final class ImunifyDbScanner implements DbScannerInterface {
 	public function tick( string $job_id ): array {
 		$state = $this->load_state( $job_id );
 		if ( array() === $state ) {
-			throw new ScanException( __( 'Database scan job not found.', 'integrum-security-scanner' ) );
+			throw new ScanException(
+				__( 'Database scan job not found. It may have expired or the cache was cleared — start a new scan.', 'integrum-security-scanner' )
+			);
 		}
 
 		if ( ! empty( $state['stopped'] ) ) {
 			return array(
 				'status'       => 'stopped',
 				'progress_pct' => (int) ( $state['progress_pct'] ?? 0 ),
+				'stage'        => (string) ( $state['stage'] ?? '' ),
 			);
 		}
 
@@ -113,6 +124,7 @@ final class ImunifyDbScanner implements DbScannerInterface {
 			return array(
 				'status'       => 'completed',
 				'progress_pct' => 100,
+				'stage'        => 'done',
 			);
 		}
 
@@ -121,6 +133,7 @@ final class ImunifyDbScanner implements DbScannerInterface {
 				'status'       => 'failed',
 				'progress_pct' => (int) ( $state['progress_pct'] ?? 0 ),
 				'message'      => (string) ( $state['message'] ?? '' ),
+				'stage'        => (string) ( $state['stage'] ?? '' ),
 			);
 		}
 
@@ -131,14 +144,22 @@ final class ImunifyDbScanner implements DbScannerInterface {
 		$deadline   = microtime( true ) + self::TICK_BUDGET_SEC;
 
 		while ( microtime( true ) < $deadline ) {
-			$cursor = is_array( $state['cursor'] ?? null ) ? $state['cursor'] : $this->batcher->initial_cursor();
-			$batch  = $this->batcher->next_batch( $cursor, $batch_size, $patterns, $size_limit );
-			$rows   = $batch['rows'];
+			$cursor   = is_array( $state['cursor'] ?? null ) ? $state['cursor'] : $this->batcher->initial_cursor();
+			$batch    = $this->batcher->next_batch( $cursor, $batch_size, $patterns, $size_limit );
+			$rows     = $batch['rows'];
 			$is_final = (bool) $batch['exhausted'];
+			$state['examined'] = (int) ( $state['examined'] ?? 0 ) + (int) ( $batch['examined'] ?? 0 );
+			$state['stage']    = (string) ( $batch['stage'] ?? $state['stage'] ?? 'posts' );
+			$state['progress_pct'] = $this->progress_from_examined(
+				(int) ( $state['examined'] ?? 0 ),
+				(int) ( $state['scope_total'] ?? 0 ),
+				$is_final
+			);
 
 			// Advance empty non-final stages without an HTTP round-trip.
 			if ( array() === $rows && ! $is_final ) {
 				$state['cursor'] = $batch['cursor'];
+				$state['status'] = 'running';
 				$this->save_state( $job_id, $state );
 				continue;
 			}
@@ -168,29 +189,23 @@ final class ImunifyDbScanner implements DbScannerInterface {
 				$state['finalized']    = true;
 				$state['status']       = 'completed';
 				$state['progress_pct'] = 100;
+				$state['stage']        = 'done';
 				$this->save_state( $job_id, $state );
 				return array(
 					'status'       => 'completed',
 					'progress_pct' => 100,
+					'stage'        => 'done',
 				);
 			}
 
-			// Pseudo-progress while walking tables.
-			$stage = (string) ( $batch['cursor']['stage'] ?? 'posts' );
-			$state['progress_pct'] = match ( $stage ) {
-				'posts'    => 25,
-				'options'  => 55,
-				'postmeta' => 80,
-				'done'     => 95,
-				default    => 40,
-			};
 			$state['status'] = 'running';
 			$this->save_state( $job_id, $state );
 		}
 
 		return array(
 			'status'       => 'running',
-			'progress_pct' => (int) ( $state['progress_pct'] ?? 10 ),
+			'progress_pct' => (int) ( $state['progress_pct'] ?? 0 ),
+			'stage'        => (string) ( $state['stage'] ?? 'posts' ),
 		);
 	}
 
@@ -210,11 +225,19 @@ final class ImunifyDbScanner implements DbScannerInterface {
 	/**
 	 * {@inheritdoc}
 	 */
+	public function has_local_job( string $job_id ): bool {
+		return array() !== $this->load_state( $job_id );
+	}
+
+	/**
+	 * {@inheritdoc}
+	 */
 	public function get_results( string $job_id ): array {
-		$key    = $this->require_key();
-		$out    = array();
-		$offset = 0;
-		$limit  = 50;
+		$key       = $this->require_key();
+		$out       = array();
+		$offset    = 0;
+		$limit     = 50;
+		$truncated = false;
 
 		do {
 			$path = '/jobs/' . rawurlencode( $job_id ) . '/db-results?limit=' . $limit . '&offset=' . $offset . '&status=detected';
@@ -231,9 +254,29 @@ final class ImunifyDbScanner implements DbScannerInterface {
 
 			$count   = count( $list );
 			$offset += $limit;
-		} while ( $count === $limit && $offset < 500 );
+			if ( $offset >= self::RESULTS_CAP ) {
+				$truncated = $count === $limit;
+				break;
+			}
+		} while ( $count === $limit );
 
-		return $out;
+		return array(
+			'findings'  => $out,
+			'truncated' => $truncated,
+		);
+	}
+
+	/**
+	 * Progress from examined candidate rows vs COUNT(*) scope (capped at 99 until final).
+	 */
+	private function progress_from_examined( int $examined, int $total, bool $is_final ): int {
+		if ( $is_final ) {
+			return 100;
+		}
+		if ( $total <= 0 ) {
+			return min( 99, max( 1, $examined > 0 ? 50 : 1 ) );
+		}
+		return min( 99, max( 0, (int) floor( 100 * $examined / $total ) ) );
 	}
 
 	/**
@@ -301,15 +344,16 @@ final class ImunifyDbScanner implements DbScannerInterface {
 			try {
 				$resp = $this->http->request( 'POST', $this->base . '/api/v1' . $path, $payload, $key );
 			} catch ( HttpException $e ) {
-				if ( $attempt >= self::MAX_BATCH_RETRIES ) {
+				if ( $attempt >= self::MAX_BATCH_RETRIES || ! self::is_retryable_transport( $e ) ) {
 					throw new ScanException( __( 'Database scanner is temporarily unavailable.', 'integrum-security-scanner' ), 0, $e );
 				}
-				usleep( 250000 );
+				usleep( 250000 * $attempt );
 				continue;
 			}
 
-			$code = (int) $resp['code'];
-			$body = is_array( $resp['body'] ) ? $resp['body'] : array();
+			$code    = (int) $resp['code'];
+			$body    = is_array( $resp['body'] ) ? $resp['body'] : array();
+			$headers = is_array( $resp['headers'] ?? null ) ? $resp['headers'] : array();
 
 			if ( 401 === $code || 403 === $code ) {
 				throw $this->auth_or_quota_error( $resp );
@@ -334,14 +378,16 @@ final class ImunifyDbScanner implements DbScannerInterface {
 						$code
 					);
 				}
+				$wait_us = self::retry_after_usleep( $headers, $attempt );
 				$this->logger->debug(
 					'db-content retryable',
 					array(
 						'code'    => $code,
 						'attempt' => $attempt,
+						'wait_us' => $wait_us,
 					)
 				);
-				usleep( 500000 * $attempt );
+				usleep( $wait_us );
 				continue;
 			}
 
@@ -358,6 +404,33 @@ final class ImunifyDbScanner implements DbScannerInterface {
 
 			return $resp;
 		}
+	}
+
+	/**
+	 * Only retry transient transport failures (timeouts / connection), not all HttpException.
+	 */
+	private static function is_retryable_transport( HttpException $e ): bool {
+		$m = strtolower( $e->getMessage() );
+		foreach ( array( 'timed out', 'timeout', 'could not resolve', 'failed to connect', 'connection reset', 'connection refused' ) as $needle ) {
+			if ( false !== strpos( $m, $needle ) ) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Honour Retry-After when present; otherwise exponential backoff. Caps wait.
+	 *
+	 * @param array<string, string> $headers Response headers (lowercase keys).
+	 */
+	private static function retry_after_usleep( array $headers, int $attempt ): int {
+		$raw = (string) ( $headers['retry-after'] ?? '' );
+		if ( '' !== $raw && ctype_digit( $raw ) ) {
+			$sec = min( self::RETRY_AFTER_MAX_S, max( 1, (int) $raw ) );
+			return $sec * 1000000;
+		}
+		return min( self::RETRY_AFTER_MAX_S * 1000000, 500000 * $attempt );
 	}
 
 	/**

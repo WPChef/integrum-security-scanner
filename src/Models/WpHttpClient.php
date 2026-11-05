@@ -129,7 +129,7 @@ final class WpHttpClient implements HttpClientInterface {
 	 * @param string                         $method   HTTP method (for logging).
 	 * @param string                         $url      Request URL (for logging).
 	 * @param array<string, mixed>|\WP_Error $response Raw WP HTTP response.
-	 * @return array{code: int, body: array<string, mixed>}
+	 * @return array{code: int, body: array<string, mixed>, headers: array<string, string>}
 	 *
 	 * @throws HttpException On WP_Error.
 	 */
@@ -143,6 +143,17 @@ final class WpHttpClient implements HttpClientInterface {
 		$raw_body = (string) wp_remote_retrieve_body( $response );
 		$decoded  = json_decode( $raw_body, true );
 		$body     = is_array( $decoded ) ? $decoded : array( 'raw' => $raw_body );
+		$headers  = array();
+		$raw_hdrs = wp_remote_retrieve_headers( $response );
+		if ( is_array( $raw_hdrs ) ) {
+			foreach ( $raw_hdrs as $hk => $hv ) {
+				$headers[ strtolower( (string) $hk ) ] = is_array( $hv ) ? (string) end( $hv ) : (string) $hv;
+			}
+		} elseif ( is_object( $raw_hdrs ) && method_exists( $raw_hdrs, 'getAll' ) ) {
+			foreach ( $raw_hdrs->getAll() as $hk => $hv ) {
+				$headers[ strtolower( (string) $hk ) ] = is_array( $hv ) ? (string) end( $hv ) : (string) $hv;
+			}
+		}
 
 		// On errors the response body carries the reason (API error JSON or a
 		// proxy/CDN HTML page); keep a truncated copy in the log so support can
@@ -152,8 +163,9 @@ final class WpHttpClient implements HttpClientInterface {
 		$this->log_response( $method, $url, $code, $body, null, $snippet );
 
 		return array(
-			'code' => $code,
-			'body' => $body,
+			'code'    => $code,
+			'body'    => $body,
+			'headers' => $headers,
 		);
 	}
 

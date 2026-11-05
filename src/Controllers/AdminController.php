@@ -33,10 +33,11 @@ final class AdminController {
 	private const CAPABILITY      = 'manage_options';
 	private const OPTION_SETTINGS = 'integrum_security_scanner_scan_settings';
 
-	private const TRANSIENT_ACTIVE_JOB    = 'integrum_security_scanner_active_job';
-	private const TRANSIENT_STARTED_JOB   = 'integrum_security_scanner_started_job';
-	private const TRANSIENT_DB_ACTIVE_JOB = 'integrum_security_scanner_db_active_job';
+	private const TRANSIENT_ACTIVE_JOB     = 'integrum_security_scanner_active_job';
+	private const TRANSIENT_STARTED_JOB    = 'integrum_security_scanner_started_job';
+	private const TRANSIENT_DB_ACTIVE_JOB  = 'integrum_security_scanner_db_active_job';
 	private const TRANSIENT_DB_STARTED_JOB = 'integrum_security_scanner_db_started_job';
+	private const TRANSIENT_DB_LAST_JOB    = 'integrum_security_scanner_db_last_job';
 
 	/**
 	 * Directory slugs checked by default (before anything is saved).
@@ -157,9 +158,13 @@ final class AdminController {
 				'i18n'    => array(
 					'error'          => __( 'Scan failed. Please try again.', 'integrum-security-scanner' ),
 					'dbError'        => __( 'Database scan failed. Please try again.', 'integrum-security-scanner' ),
-					'dbCompleted'    => __( 'Database scan completed.', 'integrum-security-scanner' ),
-					'dbStopped'      => __( 'Database scan stopped.', 'integrum-security-scanner' ),
-					'dbNoFindings'   => __( 'No database threats detected.', 'integrum-security-scanner' ),
+					'dbCompleted'     => __( 'Database scan completed.', 'integrum-security-scanner' ),
+					'dbStopped'       => __( 'Stopped sending database rows. The remote job may still finish on its own.', 'integrum-security-scanner' ),
+					'dbNoFindings'    => __( 'No database threats detected.', 'integrum-security-scanner' ),
+					'dbTruncated'     => __( 'Showing the first 500 findings. Start a new scan or contact support if you need the full list.', 'integrum-security-scanner' ),
+					'dbStagePosts'    => __( 'Scanning posts…', 'integrum-security-scanner' ),
+					'dbStageOptions'  => __( 'Scanning options…', 'integrum-security-scanner' ),
+					'dbStagePostmeta' => __( 'Scanning post meta…', 'integrum-security-scanner' ),
 					'saveKey'        => __( 'Save key', 'integrum-security-scanner' ),
 					'register'       => __( 'Register', 'integrum-security-scanner' ),
 					'showKey'        => __( 'Show site key', 'integrum-security-scanner' ),
@@ -557,7 +562,7 @@ final class AdminController {
 			wp_send_json_error( array( 'message' => 'unavailable' ) );
 		}
 
-		$job_id = $this->resolve_job_id( self::TRANSIENT_DB_ACTIVE_JOB );
+		$job_id = $this->resolve_known_db_job_id();
 		if ( '' === $job_id ) {
 			wp_send_json_error( array( 'message' => 'no job' ) );
 		}
@@ -569,18 +574,29 @@ final class AdminController {
 			wp_send_json_error( array( 'message' => $e->getMessage() ) );
 		}
 
+		$payload = array(
+			'job_id'       => $job_id,
+			'status'       => $status['status'],
+			'progress_pct' => (int) ( $status['progress_pct'] ?? 0 ),
+			'message'      => (string) ( $status['message'] ?? '' ),
+			'stage'        => (string) ( $status['stage'] ?? '' ),
+		);
+
 		if ( in_array( $status['status'], array( 'completed', 'failed', 'stopped' ), true ) ) {
 			delete_transient( self::TRANSIENT_DB_ACTIVE_JOB );
+			set_transient( self::TRANSIENT_DB_LAST_JOB, $job_id, DAY_IN_SECONDS );
+			if ( 'completed' === $status['status'] || 'failed' === $status['status'] ) {
+				try {
+					$bundle = $this->db_scanner->get_results( $job_id );
+					$payload['results']   = $this->serialize_db_findings( $bundle['findings'] );
+					$payload['truncated'] = ! empty( $bundle['truncated'] );
+				} catch ( ScanException $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- results stay optional on tick.
+					unset( $e );
+				}
+			}
 		}
 
-		wp_send_json_success(
-			array(
-				'job_id'       => $job_id,
-				'status'       => $status['status'],
-				'progress_pct' => (int) ( $status['progress_pct'] ?? 0 ),
-				'message'      => (string) ( $status['message'] ?? '' ),
-			)
-		);
+		wp_send_json_success( $payload );
 	}
 
 	/**
@@ -593,9 +609,10 @@ final class AdminController {
 			wp_send_json_error( array( 'message' => 'unavailable' ) );
 		}
 
-		$job_id = $this->resolve_job_id( self::TRANSIENT_DB_ACTIVE_JOB );
+		$job_id = $this->resolve_known_db_job_id();
 		if ( '' !== $job_id ) {
 			$this->db_scanner->stop( $job_id );
+			set_transient( self::TRANSIENT_DB_LAST_JOB, $job_id, DAY_IN_SECONDS );
 		}
 		delete_transient( self::TRANSIENT_DB_ACTIVE_JOB );
 		delete_transient( self::TRANSIENT_DB_STARTED_JOB );
@@ -613,23 +630,71 @@ final class AdminController {
 			wp_send_json_error( array( 'message' => 'unavailable' ) );
 		}
 
-		$job_id = $this->resolve_job_id( self::TRANSIENT_DB_ACTIVE_JOB );
+		$job_id = $this->resolve_known_db_job_id();
 		if ( '' === $job_id ) {
 			wp_send_json_error( array( 'message' => 'no job' ) );
 		}
 
 		try {
-			$findings = $this->db_scanner->get_results( $job_id );
+			$bundle = $this->db_scanner->get_results( $job_id );
 		} catch ( ScanException $e ) {
 			wp_send_json_error( array( 'message' => $e->getMessage() ) );
 		}
 
+		wp_send_json_success(
+			array(
+				'results'   => $this->serialize_db_findings( $bundle['findings'] ),
+				'truncated' => ! empty( $bundle['truncated'] ),
+			)
+		);
+	}
+
+	/**
+	 * @param list<\Integrum\SecurityScanner\Models\Db\DbFinding> $findings Findings.
+	 * @return list<array<string, string>>
+	 */
+	private function serialize_db_findings( array $findings ): array {
 		$rows = array();
 		foreach ( $findings as $finding ) {
 			$rows[] = $finding->to_array();
 		}
+		return $rows;
+	}
 
-		wp_send_json_success( array( 'results' => $rows ) );
+	/**
+	 * Resolves a DB job id only if it is the active, last, or locally known job.
+	 */
+	private function resolve_known_db_job_id(): string {
+		$candidate = '';
+		if ( isset( $_POST['job_id'] ) ) {
+			$candidate = sanitize_text_field( wp_unslash( $_POST['job_id'] ) );
+		}
+
+		$active  = get_transient( self::TRANSIENT_DB_ACTIVE_JOB );
+		$last    = get_transient( self::TRANSIENT_DB_LAST_JOB );
+		$active_s = false !== $active ? (string) $active : '';
+		$last_s   = false !== $last ? (string) $last : '';
+
+		if ( '' === $candidate ) {
+			return '' !== $active_s ? $active_s : $last_s;
+		}
+
+		$allowed = array( $active_s, $last_s );
+		if ( in_array( $candidate, $allowed, true ) ) {
+			return $candidate;
+		}
+
+		if ( null !== $this->db_scanner && $this->db_scanner->has_local_job( $candidate ) ) {
+			return $candidate;
+		}
+
+		$this->logger->debug(
+			'db job_id rejected',
+			array(
+				'job_id' => $candidate,
+			)
+		);
+		return '';
 	}
 
 	/**
@@ -699,7 +764,13 @@ final class AdminController {
 		// UI to idle rather than silently continuing.
 		$job_id    = $this->consume_one_shot_job( self::TRANSIENT_STARTED_JOB );
 		$db_job_id = $this->consume_one_shot_job( self::TRANSIENT_DB_STARTED_JOB );
-		$notice    = $this->consume_notice();
+		// After a completed scan (or page reload), hydrate findings from the last job.
+		$db_last_job_id = '';
+		if ( '' === $db_job_id ) {
+			$cached_last = get_transient( self::TRANSIENT_DB_LAST_JOB );
+			$db_last_job_id = false !== $cached_last ? (string) $cached_last : '';
+		}
+		$notice      = $this->consume_notice();
 		$dir_options = $this->directory_options();
 		$settings    = $this->load_scan_settings();
 

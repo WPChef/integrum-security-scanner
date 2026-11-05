@@ -21,8 +21,13 @@
  * @var bool                                        $has_key
  * @var string                                      $job_id
  * @var string                                      $db_job_id
+<<<<<<< HEAD
  * @var array{type: string, message: string, scope: string, email: string}|null $notice
  * @var string                                      $email_value Email prefill for the connection form.
+=======
+ * @var string                                      $db_last_job_id
+ * @var array{type: string, message: string, scope: string}|null    $notice
+>>>>>>> 3ce6a06 (fix: address PR #3 review — progress, last job, Retry-After, job_id)
  * @var array<string, string>                       $dir_options
  * @var array{directories: string[], include: string, exclude: string, tree: array<string,bool>} $settings
  * @var array<string,bool>                          $tree_flags
@@ -345,6 +350,7 @@ $iss_render_notice = static function ( ?array $notice, string $scope ): void {
 				<?php wp_nonce_field( 'integrum_security_scanner_start_db_scan' ); ?>
 				<input type="hidden" name="integrum_security_scanner_action" value="start_db_scan" />
 				<input type="hidden" class="iss-db-job-id" value="<?php echo esc_attr( $db_job_id ); ?>" />
+				<input type="hidden" class="iss-db-last-job-id" value="<?php echo esc_attr( $db_last_job_id ?? '' ); ?>" />
 				<button
 					type="submit"
 					class="iss-db-scan__start inline-flex items-center gap-2 rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500/40 disabled:cursor-not-allowed disabled:opacity-60"
@@ -357,7 +363,7 @@ $iss_render_notice = static function ( ?array $notice, string $scope ): void {
 					class="iss-db-scan__stop inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400/30 disabled:cursor-not-allowed disabled:opacity-60"
 					<?php disabled( '' === $db_job_id ); ?>
 				>
-					<?php esc_html_e( 'Stop', 'integrum-security-scanner' ); ?>
+					<?php esc_html_e( 'Stop sending', 'integrum-security-scanner' ); ?>
 				</button>
 			</form>
 
@@ -386,6 +392,7 @@ $iss_render_notice = static function ( ?array $notice, string $scope ): void {
 					</table>
 				</div>
 				<p class="iss-db-results__empty !m-0 !mt-2 text-sm text-slate-500 hidden"></p>
+				<p class="iss-db-results__truncated !m-0 !mt-2 text-sm text-amber-700 hidden"></p>
 			</div>
 
 			<?php $iss_render_notice( $notice, 'db_scan' ); ?>
