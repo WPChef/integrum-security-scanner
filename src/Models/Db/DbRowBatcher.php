@@ -92,14 +92,35 @@ final class DbRowBatcher {
 	}
 
 	/**
+	 * Transient key for cached COUNT(*) scope (progress only).
+	 */
+	private const SCOPE_CACHE_KEY = 'integrum_security_scanner_db_scope_est';
+
+	/**
+	 * How long the scope estimate may be reused (avoids 3× COUNT on every start).
+	 */
+	private const SCOPE_CACHE_TTL = 900; // 15 minutes.
+
+	/**
 	 * Rough COUNT(*) of in-scope candidate rows (same filters as fetch_*).
 	 *
 	 * Used only for progress_pct; not a guarantee of submitted volume after
-	 * local prescan filtering.
+	 * local prescan filtering. Result is cached briefly — stale totals only
+	 * skew the bar slightly on busy sites.
 	 *
 	 * @return array{posts: int, options: int, postmeta: int, total: int}
 	 */
 	public function estimate_scope(): array {
+		$cached = get_transient( self::SCOPE_CACHE_KEY );
+		if ( is_array( $cached ) && isset( $cached['total'] ) ) {
+			return array(
+				'posts'    => max( 0, (int) ( $cached['posts'] ?? 0 ) ),
+				'options'  => max( 0, (int) ( $cached['options'] ?? 0 ) ),
+				'postmeta' => max( 0, (int) ( $cached['postmeta'] ?? 0 ) ),
+				'total'    => max( 0, (int) $cached['total'] ),
+			);
+		}
+
 		$statuses = "'" . implode( "','", array_map( 'esc_sql', self::POST_STATUSES ) ) . "'";
 		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- status list is fixed allowlist.
 		$posts = (int) $this->wpdb->get_var(
@@ -119,16 +140,14 @@ final class DbRowBatcher {
 			"SELECT COUNT(*) FROM {$this->wpdb->postmeta}"
 		);
 
-		$posts    = max( 0, $posts );
-		$options  = max( 0, $options );
-		$postmeta = max( 0, $postmeta );
-
-		return array(
-			'posts'    => $posts,
-			'options'  => $options,
-			'postmeta' => $postmeta,
-			'total'    => $posts + $options + $postmeta,
+		$out = array(
+			'posts'    => max( 0, $posts ),
+			'options'  => max( 0, $options ),
+			'postmeta' => max( 0, $postmeta ),
+			'total'    => max( 0, $posts ) + max( 0, $options ) + max( 0, $postmeta ),
 		);
+		set_transient( self::SCOPE_CACHE_KEY, $out, self::SCOPE_CACHE_TTL );
+		return $out;
 	}
 
 	/**

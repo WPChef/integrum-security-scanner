@@ -165,6 +165,10 @@ final class AdminController {
 					'dbStagePosts'    => __( 'Scanning posts…', 'integrum-security-scanner' ),
 					'dbStageOptions'  => __( 'Scanning options…', 'integrum-security-scanner' ),
 					'dbStagePostmeta' => __( 'Scanning post meta…', 'integrum-security-scanner' ),
+					/* translators: 1: examined candidate rows, 2: estimated total candidates */
+					'dbCandidates'    => __( 'Processed %1$s of %2$s candidates', 'integrum-security-scanner' ),
+					'dbStateExpired'  => __( 'Previous database scan results are no longer available locally. Start a new scan to refresh.', 'integrum-security-scanner' ),
+					'dbRetrying'      => __( 'Temporary network issue — retrying…', 'integrum-security-scanner' ),
 					'saveKey'        => __( 'Save key', 'integrum-security-scanner' ),
 					'register'       => __( 'Register', 'integrum-security-scanner' ),
 					'showKey'        => __( 'Show site key', 'integrum-security-scanner' ),
@@ -570,8 +574,18 @@ final class AdminController {
 		try {
 			$status = $this->db_scanner->tick( $job_id );
 		} catch ( ScanException $e ) {
-			delete_transient( self::TRANSIENT_DB_ACTIVE_JOB );
-			wp_send_json_error( array( 'message' => $e->getMessage() ) );
+			$code     = $e->getCode();
+			$terminal = in_array( $code, array( 401, 403, 422 ), true );
+			if ( $terminal ) {
+				delete_transient( self::TRANSIENT_DB_ACTIVE_JOB );
+				set_transient( self::TRANSIENT_DB_LAST_JOB, $job_id, DAY_IN_SECONDS );
+			}
+			wp_send_json_error(
+				array(
+					'message'   => $e->getMessage(),
+					'retryable' => ! $terminal,
+				)
+			);
 		}
 
 		$payload = array(
@@ -580,6 +594,8 @@ final class AdminController {
 			'progress_pct' => (int) ( $status['progress_pct'] ?? 0 ),
 			'message'      => (string) ( $status['message'] ?? '' ),
 			'stage'        => (string) ( $status['stage'] ?? '' ),
+			'examined'     => (int) ( $status['examined'] ?? 0 ),
+			'scope_total'  => (int) ( $status['scope_total'] ?? 0 ),
 		);
 
 		if ( in_array( $status['status'], array( 'completed', 'failed', 'stopped' ), true ) ) {
@@ -635,16 +651,29 @@ final class AdminController {
 			wp_send_json_error( array( 'message' => 'no job' ) );
 		}
 
+		$has_local = $this->db_scanner->has_local_job( $job_id );
 		try {
 			$bundle = $this->db_scanner->get_results( $job_id );
 		} catch ( ScanException $e ) {
+			// Last job id known but remote/local state gone — soft empty, not a hard error.
+			if ( ! $has_local ) {
+				wp_send_json_success(
+					array(
+						'results'       => array(),
+						'truncated'     => false,
+						'state_expired' => true,
+						'message'       => __( 'Previous database scan results are no longer available locally. Start a new scan to refresh.', 'integrum-security-scanner' ),
+					)
+				);
+			}
 			wp_send_json_error( array( 'message' => $e->getMessage() ) );
 		}
 
 		wp_send_json_success(
 			array(
-				'results'   => $this->serialize_db_findings( $bundle['findings'] ),
-				'truncated' => ! empty( $bundle['truncated'] ),
+				'results'       => $this->serialize_db_findings( $bundle['findings'] ),
+				'truncated'     => ! empty( $bundle['truncated'] ),
+				'state_expired' => ! $has_local,
 			)
 		);
 	}

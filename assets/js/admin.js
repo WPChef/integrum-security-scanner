@@ -420,11 +420,11 @@
     }
     stopBtn.addEventListener("click", function() {
       const statusSection = document.querySelector(".iss-status");
-      const progressLabel = statusSection && statusSection.querySelector(".iss-progress__label");
+      const progressLabel2 = statusSection && statusSection.querySelector(".iss-progress__label");
       const stoppedText = CFG.i18n && CFG.i18n.stopped || "Scan stopped.";
       stopBtn.disabled = true;
-      if (progressLabel) {
-        progressLabel.textContent = CFG.i18n && CFG.i18n.stopping || "Stopping\u2026";
+      if (progressLabel2) {
+        progressLabel2.textContent = CFG.i18n && CFG.i18n.stopping || "Stopping\u2026";
       }
       fetchJSON("integrum_security_scanner_stop", {}).then(function() {
         window.__llarStopped = true;
@@ -449,8 +449,8 @@
         }
       }).catch(function() {
         stopBtn.disabled = false;
-        if (progressLabel) {
-          progressLabel.textContent = CFG.i18n ? CFG.i18n.error : "error";
+        if (progressLabel2) {
+          progressLabel2.textContent = CFG.i18n ? CFG.i18n.error : "error";
         }
       });
     });
@@ -1019,16 +1019,16 @@
     revealIntoView(statusSection);
     setDirTreeLocked(true);
     const progressBar = statusSection.querySelector(".iss-progress__bar");
-    const progressLabel = statusSection.querySelector(".iss-progress__label");
+    const progressLabel2 = statusSection.querySelector(".iss-progress__label");
     let samples = [];
     function pollStatus() {
       fetchJSON("integrum_security_scanner_status", { job_id: jobId }).then(onStatus).catch(function() {
-        progressLabel.textContent = CFG.i18n ? CFG.i18n.error : "error";
+        progressLabel2.textContent = CFG.i18n ? CFG.i18n.error : "error";
       });
     }
     function onStatus(payload) {
       if (!payload || !payload.success) {
-        progressLabel.textContent = CFG.i18n ? CFG.i18n.error : "error";
+        progressLabel2.textContent = CFG.i18n ? CFG.i18n.error : "error";
         return;
       }
       const status = payload.data.status || "unknown";
@@ -1058,7 +1058,7 @@
       if (currentFile) {
         label += " \xB7 " + currentFile;
       }
-      progressLabel.textContent = label;
+      progressLabel2.textContent = label;
       if (STATUSES_DONE.indexOf(status) === -1) {
         if (window.__llarStopped) {
           return;
@@ -1145,6 +1145,69 @@
     }
     return i18n.dbStagePosts || "Scanning database\u2026";
   }
+  function progressLabel(data) {
+    const examined = Number(data.examined) || 0;
+    const total = Number(data.scope_total) || 0;
+    const i18n = CFG.i18n || {};
+    const tpl = i18n.dbCandidates || "Processed %1$s of %2$s candidates";
+    const candidates = total > 0 ? tpl.replace("%1$s", String(examined)).replace("%2$s", String(total)) : tpl.replace("%1$s", String(examined)).replace("%2$s", "\u2026");
+    const stage = data.stage ? stageLabel(data.stage) : "";
+    return stage ? candidates + " \xB7 " + stage : candidates;
+  }
+  function renderFindings(section, rows, truncated, opts) {
+    const resultsWrap = section.querySelector(".iss-db-results");
+    const tbody = section.querySelector(".iss-db-results__body");
+    const emptyEl2 = section.querySelector(".iss-db-results__empty");
+    const truncEl = section.querySelector(".iss-db-results__truncated");
+    if (!resultsWrap || !tbody) {
+      return;
+    }
+    resultsWrap.classList.remove("hidden");
+    tbody.innerHTML = "";
+    if (truncEl) {
+      if (truncated) {
+        truncEl.classList.remove("hidden");
+        truncEl.textContent = CFG.i18n && CFG.i18n.dbTruncated || "Showing the first 500 findings.";
+      } else {
+        truncEl.classList.add("hidden");
+        truncEl.textContent = "";
+      }
+    }
+    if (!rows || !rows.length) {
+      if (emptyEl2) {
+        emptyEl2.classList.remove("hidden");
+        emptyEl2.textContent = opts && opts.emptyMessage || CFG.i18n && CFG.i18n.dbNoFindings || "No database threats detected.";
+      }
+      return;
+    }
+    if (emptyEl2) {
+      emptyEl2.classList.add("hidden");
+    }
+    rows.forEach(function(row) {
+      const tr = document.createElement("tr");
+      const sev = document.createElement("td");
+      sev.className = "border-b border-slate-100 py-2 pr-3";
+      sev.textContent = row.severity || "";
+      const loc = document.createElement("td");
+      loc.className = "border-b border-slate-100 py-2 pr-3";
+      if (row.edit_url) {
+        const a = document.createElement("a");
+        a.href = row.edit_url;
+        a.textContent = row.label || row.row_id;
+        a.className = "text-primary-700 underline";
+        loc.appendChild(a);
+      } else {
+        loc.textContent = row.label || row.table + " #" + row.row_id;
+      }
+      const sig = document.createElement("td");
+      sig.className = "border-b border-slate-100 py-2 font-mono text-xs";
+      sig.textContent = row.signature_id || "";
+      tr.appendChild(sev);
+      tr.appendChild(loc);
+      tr.appendChild(sig);
+      tbody.appendChild(tr);
+    });
+  }
   function initDbPolling(jobId) {
     const section = document.querySelector("#iss-db-scan");
     if (!section || !jobId) {
@@ -1156,10 +1219,6 @@
     const label = section.querySelector(".iss-db-progress__label");
     const startBtn = section.querySelector(".iss-db-scan__start");
     const stopBtn = section.querySelector(".iss-db-scan__stop");
-    const resultsWrap = section.querySelector(".iss-db-results");
-    const tbody = section.querySelector(".iss-db-results__body");
-    const emptyEl2 = section.querySelector(".iss-db-results__empty");
-    const truncEl = section.querySelector(".iss-db-results__truncated");
     if (progressWrap) {
       progressWrap.classList.remove("hidden");
       revealIntoView(progressWrap);
@@ -1197,62 +1256,12 @@
       }
       setProgress(100);
     }
-    function renderFindings(rows, truncated) {
-      if (!resultsWrap || !tbody) {
-        return;
-      }
-      resultsWrap.classList.remove("hidden");
-      tbody.innerHTML = "";
-      if (truncEl) {
-        if (truncated) {
-          truncEl.classList.remove("hidden");
-          truncEl.textContent = CFG.i18n && CFG.i18n.dbTruncated || "Showing the first 500 findings.";
-        } else {
-          truncEl.classList.add("hidden");
-          truncEl.textContent = "";
-        }
-      }
-      if (!rows || !rows.length) {
-        if (emptyEl2) {
-          emptyEl2.classList.remove("hidden");
-          emptyEl2.textContent = CFG.i18n && CFG.i18n.dbNoFindings || "No database threats detected.";
-        }
-        return;
-      }
-      if (emptyEl2) {
-        emptyEl2.classList.add("hidden");
-      }
-      rows.forEach(function(row) {
-        const tr = document.createElement("tr");
-        const sev = document.createElement("td");
-        sev.className = "border-b border-slate-100 py-2 pr-3";
-        sev.textContent = row.severity || "";
-        const loc = document.createElement("td");
-        loc.className = "border-b border-slate-100 py-2 pr-3";
-        if (row.edit_url) {
-          const a = document.createElement("a");
-          a.href = row.edit_url;
-          a.textContent = row.label || row.row_id;
-          a.className = "text-primary-700 underline";
-          loc.appendChild(a);
-        } else {
-          loc.textContent = row.label || row.table + " #" + row.row_id;
-        }
-        const sig = document.createElement("td");
-        sig.className = "border-b border-slate-100 py-2 font-mono text-xs";
-        sig.textContent = row.signature_id || "";
-        tr.appendChild(sev);
-        tr.appendChild(loc);
-        tr.appendChild(sig);
-        tbody.appendChild(tr);
-      });
-    }
     function loadResults2() {
       return fetchJSON("integrum_security_scanner_db_results", { job_id: jobId }).then(function(payload) {
         if (payload && payload.success && payload.data) {
-          renderFindings(payload.data.results || [], !!payload.data.truncated);
+          renderFindings(section, payload.data.results || [], !!payload.data.truncated);
         } else {
-          renderFindings([], false);
+          renderFindings(section, [], false);
         }
       });
     }
@@ -1261,21 +1270,28 @@
         return;
       }
       if (!payload || !payload.success) {
+        const data2 = payload && payload.data || {};
+        if (data2.retryable) {
+          if (label) {
+            label.textContent = CFG.i18n && CFG.i18n.dbRetrying || data2.message || "Temporary network issue \u2014 retrying\u2026";
+          }
+          return;
+        }
         if (label) {
-          label.textContent = payload && payload.data && payload.data.message || CFG.i18n && CFG.i18n.dbError || "error";
+          label.textContent = data2.message || CFG.i18n && CFG.i18n.dbError || "error";
         }
         finishUi(false);
         return;
       }
       const data = payload.data || {};
       setProgress(data.progress_pct);
-      if (label && data.status === "running" && data.stage) {
-        label.textContent = stageLabel(data.stage) + " " + (Number(data.progress_pct) || 0) + "%";
+      if (label && data.status === "running") {
+        label.textContent = progressLabel(data);
       }
       if (data.status === "completed") {
         finishUi(true);
         if (data.results) {
-          renderFindings(data.results, !!data.truncated);
+          renderFindings(section, data.results, !!data.truncated);
         } else {
           loadResults2();
         }
@@ -1288,7 +1304,7 @@
         finishUi(false);
         if (data.status === "failed") {
           if (data.results) {
-            renderFindings(data.results, !!data.truncated);
+            renderFindings(section, data.results, !!data.truncated);
           } else {
             loadResults2();
           }
@@ -1298,9 +1314,8 @@
     function tick() {
       fetchJSON("integrum_security_scanner_db_status", { job_id: jobId }).then(onTick).catch(function() {
         if (label) {
-          label.textContent = CFG.i18n && CFG.i18n.dbError || "error";
+          label.textContent = CFG.i18n && CFG.i18n.dbRetrying || "Temporary network issue \u2014 retrying\u2026";
         }
-        finishUi(false);
       });
     }
     if (stopBtn) {
@@ -1322,63 +1337,18 @@
     if (!section || !jobId) {
       return;
     }
-    const resultsWrap = section.querySelector(".iss-db-results");
-    const tbody = section.querySelector(".iss-db-results__body");
-    const emptyEl2 = section.querySelector(".iss-db-results__empty");
-    const truncEl = section.querySelector(".iss-db-results__truncated");
-    if (!resultsWrap || !tbody) {
-      return;
-    }
     fetchJSON("integrum_security_scanner_db_results", { job_id: jobId }).then(function(payload) {
       if (!payload || !payload.success || !payload.data) {
         return;
       }
-      const rows = payload.data.results || [];
-      const truncated = !!payload.data.truncated;
-      resultsWrap.classList.remove("hidden");
-      tbody.innerHTML = "";
-      if (truncEl) {
-        if (truncated) {
-          truncEl.classList.remove("hidden");
-          truncEl.textContent = CFG.i18n && CFG.i18n.dbTruncated || "Showing the first 500 findings.";
-        } else {
-          truncEl.classList.add("hidden");
-        }
-      }
-      if (!rows.length) {
-        if (emptyEl2) {
-          emptyEl2.classList.remove("hidden");
-          emptyEl2.textContent = CFG.i18n && CFG.i18n.dbNoFindings || "No database threats detected.";
-        }
+      const data = payload.data;
+      if (data.state_expired && (!data.results || !data.results.length)) {
+        renderFindings(section, [], false, {
+          emptyMessage: data.message || CFG.i18n && CFG.i18n.dbStateExpired || "Previous database scan results are no longer available locally. Start a new scan to refresh."
+        });
         return;
       }
-      if (emptyEl2) {
-        emptyEl2.classList.add("hidden");
-      }
-      rows.forEach(function(row) {
-        const tr = document.createElement("tr");
-        const sev = document.createElement("td");
-        sev.className = "border-b border-slate-100 py-2 pr-3";
-        sev.textContent = row.severity || "";
-        const loc = document.createElement("td");
-        loc.className = "border-b border-slate-100 py-2 pr-3";
-        if (row.edit_url) {
-          const a = document.createElement("a");
-          a.href = row.edit_url;
-          a.textContent = row.label || row.row_id;
-          a.className = "text-primary-700 underline";
-          loc.appendChild(a);
-        } else {
-          loc.textContent = row.label || row.table + " #" + row.row_id;
-        }
-        const sig = document.createElement("td");
-        sig.className = "border-b border-slate-100 py-2 font-mono text-xs";
-        sig.textContent = row.signature_id || "";
-        tr.appendChild(sev);
-        tr.appendChild(loc);
-        tr.appendChild(sig);
-        tbody.appendChild(tr);
-      });
+      renderFindings(section, data.results || [], !!data.truncated);
     });
   }
 

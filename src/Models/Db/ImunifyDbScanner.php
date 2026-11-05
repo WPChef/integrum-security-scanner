@@ -174,9 +174,17 @@ final class ImunifyDbScanner implements DbScannerInterface {
 					)
 				);
 			} catch ( ScanException $e ) {
-				$state['status']  = 'failed';
-				$state['message'] = $e->getMessage();
-				$this->save_state( $job_id, $state );
+				// Persist failure only for terminal API codes; transport / exhausted
+				// 429·503 leave cursor intact so the next tick can resume.
+				if ( in_array( $e->getCode(), array( 401, 403, 422 ), true ) ) {
+					$state['status']  = 'failed';
+					$state['message'] = $e->getMessage();
+					$this->save_state( $job_id, $state );
+				} else {
+					$state['cursor'] = $batch['cursor'];
+					$state['status'] = 'running';
+					$this->save_state( $job_id, $state );
+				}
 				throw $e;
 			}
 
@@ -195,6 +203,8 @@ final class ImunifyDbScanner implements DbScannerInterface {
 					'status'       => 'completed',
 					'progress_pct' => 100,
 					'stage'        => 'done',
+					'examined'     => (int) ( $state['examined'] ?? 0 ),
+					'scope_total'  => (int) ( $state['scope_total'] ?? 0 ),
 				);
 			}
 
@@ -206,6 +216,8 @@ final class ImunifyDbScanner implements DbScannerInterface {
 			'status'       => 'running',
 			'progress_pct' => (int) ( $state['progress_pct'] ?? 0 ),
 			'stage'        => (string) ( $state['stage'] ?? 'posts' ),
+			'examined'     => (int) ( $state['examined'] ?? 0 ),
+			'scope_total'  => (int) ( $state['scope_total'] ?? 0 ),
 		);
 	}
 
