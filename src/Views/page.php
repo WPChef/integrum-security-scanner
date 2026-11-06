@@ -20,6 +20,8 @@
  * @var string|null                                 $site_key
  * @var bool                                        $has_key
  * @var string                                      $job_id
+ * @var string                                      $db_job_id
+ * @var string                                      $db_last_job_id
  * @var array{type: string, message: string, scope: string, email: string}|null $notice
  * @var string                                      $email_value Email prefill for the connection form.
  * @var array<string, string>                       $dir_options
@@ -35,6 +37,19 @@ declare( strict_types = 1 );
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
+
+/**
+ * Renders the shared notice partial when the pending notice matches $scope.
+ *
+ * @param array{type: string, message: string, scope: string}|null $notice Pending notice.
+ * @param string                                                   $scope  Section scope.
+ */
+$iss_render_notice = static function ( ?array $notice, string $scope ): void {
+	if ( null === $notice || $scope !== ( $notice['scope'] ?? '' ) ) {
+		return;
+	}
+	require INTEGRUM_SECURITY_SCANNER_DIR . 'src/Views/notice.php';
+};
 ?>
 <div class="wrap integrum-security-scanner" id="integrum-security-scanner-app">
 
@@ -172,9 +187,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 					</button>
 				</div>
 
-				<?php if ( null !== $notice && 'connection' === $notice['scope'] ) : ?>
-					<?php require INTEGRUM_SECURITY_SCANNER_DIR . 'src/Views/notice.php'; ?>
-				<?php endif; ?>
+				<?php $iss_render_notice( $notice, 'connection' ); ?>
 			</form>
 
 			<?php require INTEGRUM_SECURITY_SCANNER_DIR . 'src/Views/terms-modal.php'; ?>
@@ -320,9 +333,65 @@ if ( ! defined( 'ABSPATH' ) ) {
 				</div>
 			</form>
 
-			<?php if ( null !== $notice && 'scan' === $notice['scope'] ) : ?>
-				<?php require INTEGRUM_SECURITY_SCANNER_DIR . 'src/Views/notice.php'; ?>
-			<?php endif; ?>
+			<?php $iss_render_notice( $notice, 'scan' ); ?>
+		</section>
+
+		<section class="iss-db-scan rounded-xl border border-slate-200 bg-white p-6 shadow-sm <?php echo $has_key ? '' : 'pointer-events-none opacity-60'; ?>" id="iss-db-scan">
+			<h2 class="!m-0 !mb-1 !text-lg !font-semibold !text-slate-800"><?php esc_html_e( 'Database scan', 'integrum-security-scanner' ); ?></h2>
+			<p class="!m-0 !mb-4 text-sm text-slate-500">
+				<?php esc_html_e( 'Selected database content (posts, options, post meta) is sent to Imunify Connect (CloudLinux) for malware analysis. File-scan quota is separate from database-scan quota.', 'integrum-security-scanner' ); ?>
+			</p>
+
+			<form method="post" action="" class="iss-db-scan__form flex flex-wrap items-center gap-3">
+				<?php wp_nonce_field( 'integrum_security_scanner_start_db_scan' ); ?>
+				<input type="hidden" name="integrum_security_scanner_action" value="start_db_scan" />
+				<input type="hidden" class="iss-db-job-id" value="<?php echo esc_attr( $db_job_id ); ?>" />
+				<input type="hidden" class="iss-db-last-job-id" value="<?php echo esc_attr( $db_last_job_id ?? '' ); ?>" />
+				<button
+					type="button"
+					class="iss-db-scan__start inline-flex items-center gap-2 rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500/40 disabled:cursor-not-allowed disabled:opacity-60"
+					<?php disabled( ! $has_key || '' !== $db_job_id ); ?>
+				>
+					<?php esc_html_e( 'Scan database', 'integrum-security-scanner' ); ?>
+				</button>
+				<button
+					type="button"
+					class="iss-db-scan__stop inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400/30 disabled:cursor-not-allowed disabled:opacity-60"
+					<?php disabled( '' === $db_job_id ); ?>
+				>
+					<?php esc_html_e( 'Stop sending', 'integrum-security-scanner' ); ?>
+				</button>
+			</form>
+
+			<div class="iss-db-progress mt-4 <?php echo '' !== $db_job_id ? '' : 'hidden'; ?>">
+				<div class="iss-progress mb-1 flex items-center justify-between text-xs text-slate-500">
+					<span class="iss-db-progress__label"><?php esc_html_e( 'Scanning database…', 'integrum-security-scanner' ); ?></span>
+					<span class="iss-db-progress__pct">0%</span>
+				</div>
+				<div class="iss-progress__track h-2 overflow-hidden rounded-full bg-slate-100">
+					<div class="iss-db-progress__bar h-full w-0 rounded-full bg-primary-600 transition-all" style="width:0%"></div>
+				</div>
+			</div>
+
+			<div class="iss-db-results mt-5 hidden">
+				<h3 class="!m-0 !mb-2 !text-sm !font-semibold !text-slate-800"><?php esc_html_e( 'Findings', 'integrum-security-scanner' ); ?></h3>
+				<div class="overflow-x-auto">
+					<table class="iss-db-results__table w-full text-left text-sm">
+						<thead>
+							<tr>
+								<th class="border-b border-slate-200 py-2 pr-3 font-medium text-slate-600"><?php esc_html_e( 'Severity', 'integrum-security-scanner' ); ?></th>
+								<th class="border-b border-slate-200 py-2 pr-3 font-medium text-slate-600"><?php esc_html_e( 'Location', 'integrum-security-scanner' ); ?></th>
+								<th class="border-b border-slate-200 py-2 font-medium text-slate-600"><?php esc_html_e( 'Signature', 'integrum-security-scanner' ); ?></th>
+							</tr>
+						</thead>
+						<tbody class="iss-db-results__body"></tbody>
+					</table>
+				</div>
+				<p class="iss-db-results__empty !m-0 !mt-2 text-sm text-slate-500 hidden"></p>
+				<p class="iss-db-results__truncated !m-0 !mt-2 text-sm text-amber-700 hidden"></p>
+			</div>
+
+			<?php $iss_render_notice( $notice, 'db_scan' ); ?>
 		</section>
 
 		<section class="iss-history rounded-xl border border-slate-200 bg-white p-6 shadow-sm">

@@ -9,11 +9,12 @@ import { initPreview } from './preview.js';
 import { initPolling } from './status.js';
 import { initResultsFilter } from './results.js';
 import { initNotices } from './notices.js';
-import { refreshHistory } from './history.js';
+import { initDbPolling, initDbResultsHydration, initDbScanStart } from './dbScan.js';
 
 initKeyForm();
 initStopScan();
 initStartForm();
+initDbScanStart();
 
 // Directory tree ← preview: the tree reports toggles, the preview refreshes
 // (debounced) with the new scope. The hoisted `notifyPreview` keeps the
@@ -35,4 +36,14 @@ if ( jobIdInput && jobIdInput.value ) {
 } else {
 	// No active scan: surface any pending form notice instead.
 	initNotices();
+}
+
+const dbJobIdInput = document.querySelector( '.iss-db-job-id' );
+if ( dbJobIdInput && dbJobIdInput.value ) {
+	initDbPolling( dbJobIdInput.value );
+} else {
+	const dbLast = document.querySelector( '.iss-db-last-job-id' );
+	if ( dbLast && dbLast.value ) {
+		initDbResultsHydration( dbLast.value );
+	}
 }

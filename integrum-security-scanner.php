@@ -83,6 +83,15 @@ if ( is_admin() ) {
 	);
 	$scanner      = new \Integrum\SecurityScanner\Models\ImunifyScanner( $http, $logger, $storage, $job_store, $file_collector, $site_domain, $scanner_base );
 
+	global $wpdb;
+	$db_scanner = new \Integrum\SecurityScanner\Models\Db\ImunifyDbScanner(
+		$http,
+		$logger,
+		$storage,
+		new \Integrum\SecurityScanner\Models\Db\DbRowBatcher( $wpdb ),
+		$scanner_base
+	);
+
 	$licensing_base = \Integrum\SecurityScanner\Models\ApiBaseUrl::resolve(
 		(string) apply_filters( 'integrum_security_scanner_licensing_api_base', INTEGRUM_SECURITY_SCANNER_LICENSING_API_BASE ),
 		INTEGRUM_SECURITY_SCANNER_LICENSING_API_BASE,
@@ -96,7 +105,8 @@ if ( is_admin() ) {
 		$licensing,
 		$logger,
 		$file_collector,
-		new \Integrum\SecurityScanner\Models\ScanHistoryStorage()
+		new \Integrum\SecurityScanner\Models\ScanHistoryStorage(),
+		$db_scanner
 	);
 	$admin->register();
 }
