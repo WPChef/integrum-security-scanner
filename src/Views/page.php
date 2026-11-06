@@ -21,13 +21,9 @@
  * @var bool                                        $has_key
  * @var string                                      $job_id
  * @var string                                      $db_job_id
-<<<<<<< HEAD
+ * @var string                                      $db_last_job_id
  * @var array{type: string, message: string, scope: string, email: string}|null $notice
  * @var string                                      $email_value Email prefill for the connection form.
-=======
- * @var string                                      $db_last_job_id
- * @var array{type: string, message: string, scope: string}|null    $notice
->>>>>>> 3ce6a06 (fix: address PR #3 review — progress, last job, Retry-After, job_id)
  * @var array<string, string>                       $dir_options
  * @var array{directories: string[], include: string, exclude: string, tree: array<string,bool>} $settings
  * @var array<string,bool>                          $tree_flags
