@@ -193,7 +193,10 @@ final class ImunifyDbScanner implements DbScannerInterface {
 			$state['submitted'] = (int) ( $state['submitted'] ?? 0 ) + count( $rows );
 			$state['cursor']    = $batch['cursor'];
 
-			if ( $is_final ) {
+			// Peer tick already closed the Connect job (HTTP 409 → already_closed).
+			$remote_done = ! empty( $body['already_closed'] );
+
+			if ( $is_final || $remote_done ) {
 				$state['finalized']    = true;
 				$state['status']       = 'completed';
 				$state['progress_pct'] = 100;
@@ -403,6 +406,27 @@ final class ImunifyDbScanner implements DbScannerInterface {
 				continue;
 			}
 
+			// Concurrent ticks: Connect already finalized / cancelled the job.
+			// Do not surface as retryable transport — treat as soft completion.
+			if ( 409 === $code && self::is_job_closed_conflict( $body ) ) {
+				$this->logger->debug(
+					'db-content already closed',
+					array(
+						'status' => (string) ( $body['status'] ?? '' ),
+						'error'  => (string) ( $body['error'] ?? '' ),
+					)
+				);
+				return array(
+					'code'    => 200,
+					'body'    => array(
+						'accepted'       => 0,
+						'job_status'     => 'completed',
+						'already_closed' => true,
+					),
+					'headers' => $headers,
+				);
+			}
+
 			if ( $code < 200 || $code >= 300 ) {
 				throw new ScanException(
 					sprintf(
@@ -429,6 +453,20 @@ final class ImunifyDbScanner implements DbScannerInterface {
 			}
 		}
 		return false;
+	}
+
+	/**
+	 * Connect 409 when the remote job no longer accepts db-content batches.
+	 *
+	 * @param array<string, mixed> $body Decoded error body.
+	 */
+	private static function is_job_closed_conflict( array $body ): bool {
+		$status = strtolower( (string) ( $body['status'] ?? '' ) );
+		if ( in_array( $status, array( 'completed', 'cancelled', 'cancelled_or_completed' ), true ) ) {
+			return true;
+		}
+		$err = strtolower( (string) ( $body['error'] ?? '' ) );
+		return false !== strpos( $err, 'not accepting' ) || false !== strpos( $err, 'no longer accepting' );
 	}
 
 	/**

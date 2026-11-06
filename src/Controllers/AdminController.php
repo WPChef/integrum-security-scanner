@@ -83,6 +83,7 @@ final class AdminController {
 		add_action( 'wp_ajax_integrum_security_scanner_preview', array( $this, 'ajax_preview' ) );
 		add_action( 'wp_ajax_integrum_security_scanner_dirchildren', array( $this, 'ajax_dirchildren' ) );
 		add_action( 'wp_ajax_integrum_security_scanner_history', array( $this, 'ajax_history' ) );
+		add_action( 'wp_ajax_integrum_security_scanner_db_start', array( $this, 'ajax_db_start' ) );
 		add_action( 'wp_ajax_integrum_security_scanner_db_status', array( $this, 'ajax_db_status' ) );
 		add_action( 'wp_ajax_integrum_security_scanner_db_stop', array( $this, 'ajax_db_stop' ) );
 		add_action( 'wp_ajax_integrum_security_scanner_db_results', array( $this, 'ajax_db_results' ) );
@@ -169,6 +170,7 @@ final class AdminController {
 					'dbCandidates'    => __( 'Processed %1$s of %2$s candidates', 'integrum-security-scanner' ),
 					'dbStateExpired'  => __( 'Previous database scan results are no longer available locally. Start a new scan to refresh.', 'integrum-security-scanner' ),
 					'dbRetrying'      => __( 'Temporary network issue — retrying…', 'integrum-security-scanner' ),
+					'dbStarting'      => __( 'Starting database scan…', 'integrum-security-scanner' ),
 					'saveKey'        => __( 'Save key', 'integrum-security-scanner' ),
 					'register'       => __( 'Register', 'integrum-security-scanner' ),
 					'showKey'        => __( 'Show site key', 'integrum-security-scanner' ),
@@ -557,6 +559,53 @@ final class AdminController {
 	}
 
 	/**
+	 * AJAX: starts a database scan without a full-page PRG reload.
+	 */
+	public function ajax_db_start(): void {
+		$this->guard_ajax();
+
+		if ( null === $this->db_scanner ) {
+			wp_send_json_error(
+				array(
+					'message' => __( 'Database scanner is not available.', 'integrum-security-scanner' ),
+				)
+			);
+		}
+
+		try {
+			$job_id = $this->db_scanner->start();
+		} catch ( ScanException $e ) {
+			$this->logger->error(
+				'db scan start failed',
+				array(
+					'message' => $e->getMessage(),
+					'code'    => $e->getCode(),
+				)
+			);
+			wp_send_json_error(
+				array(
+					'message' => $this->message_for_start_failure(
+						$e,
+						__( 'The site key is missing or was rejected. Use the Connection form above to obtain a new key, then start the database scan again.', 'integrum-security-scanner' ),
+						__( 'Could not start the database scan. Please try again in a moment.', 'integrum-security-scanner' )
+					),
+				)
+			);
+		}
+
+		set_transient( self::TRANSIENT_DB_ACTIVE_JOB, $job_id, HOUR_IN_SECONDS );
+		set_transient( self::TRANSIENT_DB_STARTED_JOB, $job_id, 5 * MINUTE_IN_SECONDS );
+		set_transient( self::TRANSIENT_DB_LAST_JOB, $job_id, DAY_IN_SECONDS );
+
+		wp_send_json_success(
+			array(
+				'job_id'  => $job_id,
+				'message' => __( 'Database scan started. Keep this page open until it completes.', 'integrum-security-scanner' ),
+			)
+		);
+	}
+
+	/**
 	 * AJAX: advances a database scan job (submit next batch / finalise).
 	 */
 	public function ajax_db_status(): void {
@@ -574,8 +623,11 @@ final class AdminController {
 		try {
 			$status = $this->db_scanner->tick( $job_id );
 		} catch ( ScanException $e ) {
-			$code     = $e->getCode();
-			$terminal = in_array( $code, array( 401, 403, 422 ), true );
+			$code = $e->getCode();
+			// 401/403/422 — auth/quota/scan_failed. 409 — job already closed on Connect.
+			// Only true transport / 429·503 (and code 0) stay retryable for the UI poller.
+			$terminal  = in_array( $code, array( 401, 403, 409, 422 ), true );
+			$retryable = ! $terminal && ( 0 === $code || 429 === $code || 503 === $code );
 			if ( $terminal ) {
 				delete_transient( self::TRANSIENT_DB_ACTIVE_JOB );
 				set_transient( self::TRANSIENT_DB_LAST_JOB, $job_id, DAY_IN_SECONDS );
@@ -583,7 +635,7 @@ final class AdminController {
 			wp_send_json_error(
 				array(
 					'message'   => $e->getMessage(),
-					'retryable' => ! $terminal,
+					'retryable' => $retryable,
 				)
 			);
 		}

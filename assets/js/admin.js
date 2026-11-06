@@ -1208,10 +1208,36 @@
       tbody.appendChild(tr);
     });
   }
+  function setDbNotice(section, type, message) {
+    let notice = section.querySelector(".iss-db-ajax-notice");
+    if (!notice) {
+      notice = document.createElement("div");
+      notice.className = "iss-db-ajax-notice mt-3 rounded-md border px-3 py-2 text-sm";
+      notice.setAttribute("role", "status");
+      const form = section.querySelector(".iss-db-scan__form");
+      if (form && form.parentNode) {
+        form.parentNode.insertBefore(notice, form.nextSibling);
+      } else {
+        section.prepend(notice);
+      }
+    }
+    if (!type || !message) {
+      notice.hidden = true;
+      notice.textContent = "";
+      return;
+    }
+    notice.hidden = false;
+    notice.textContent = message;
+    notice.className = "iss-db-ajax-notice mt-3 rounded-md border px-3 py-2 text-sm " + (type === "error" ? "border-red-200 bg-red-50 text-red-800" : "border-emerald-200 bg-emerald-50 text-emerald-800");
+  }
   function initDbPolling(jobId) {
     const section = document.querySelector("#iss-db-scan");
     if (!section || !jobId) {
       return;
+    }
+    const jobInput = section.querySelector(".iss-db-job-id");
+    if (jobInput) {
+      jobInput.value = jobId;
     }
     const progressWrap = section.querySelector(".iss-db-progress");
     const bar = section.querySelector(".iss-db-progress__bar");
@@ -1221,7 +1247,6 @@
     const stopBtn = section.querySelector(".iss-db-scan__stop");
     if (progressWrap) {
       progressWrap.classList.remove("hidden");
-      revealIntoView(progressWrap);
     }
     if (startBtn) {
       startBtn.disabled = true;
@@ -1229,8 +1254,9 @@
     if (stopBtn) {
       stopBtn.disabled = false;
     }
-    let timer = null;
     let stopped = false;
+    let inFlight = false;
+    let timer = null;
     function setProgress(pct) {
       const n = Math.max(0, Math.min(100, Number(pct) || 0));
       if (bar) {
@@ -1240,16 +1266,34 @@
         pctEl.textContent = n + "%";
       }
     }
-    function finishUi(ok) {
+    function clearTimer() {
       if (timer) {
-        clearInterval(timer);
+        clearTimeout(timer);
         timer = null;
       }
+    }
+    function scheduleNext() {
+      clearTimer();
+      if (stopped) {
+        return;
+      }
+      timer = setTimeout(tick, TICK_MS);
+    }
+    function finishUi(ok) {
+      clearTimer();
+      stopped = true;
       if (startBtn) {
         startBtn.disabled = false;
       }
       if (stopBtn) {
         stopBtn.disabled = true;
+      }
+      if (jobInput) {
+        jobInput.value = "";
+      }
+      const lastInput = section.querySelector(".iss-db-last-job-id");
+      if (lastInput) {
+        lastInput.value = jobId;
       }
       if (label && ok) {
         label.textContent = CFG.i18n && CFG.i18n.dbCompleted || "Database scan completed.";
@@ -1275,11 +1319,13 @@
           if (label) {
             label.textContent = CFG.i18n && CFG.i18n.dbRetrying || data2.message || "Temporary network issue \u2014 retrying\u2026";
           }
+          scheduleNext();
           return;
         }
         if (label) {
           label.textContent = data2.message || CFG.i18n && CFG.i18n.dbError || "error";
         }
+        setDbNotice(section, "error", data2.message || CFG.i18n && CFG.i18n.dbError || "error");
         finishUi(false);
         return;
       }
@@ -1290,6 +1336,11 @@
       }
       if (data.status === "completed") {
         finishUi(true);
+        setDbNotice(
+          section,
+          "success",
+          CFG.i18n && CFG.i18n.dbCompleted || "Database scan completed."
+        );
         if (data.results) {
           renderFindings(section, data.results, !!data.truncated);
         } else {
@@ -1301,6 +1352,9 @@
         if (label) {
           label.textContent = data.message || (data.status === "stopped" ? CFG.i18n && CFG.i18n.dbStopped || "stopped" : CFG.i18n && CFG.i18n.dbError || "error");
         }
+        if (data.status === "failed") {
+          setDbNotice(section, "error", data.message || CFG.i18n && CFG.i18n.dbError || "error");
+        }
         finishUi(false);
         if (data.status === "failed") {
           if (data.results) {
@@ -1309,18 +1363,29 @@
             loadResults2();
           }
         }
+        return;
       }
+      scheduleNext();
     }
     function tick() {
+      if (stopped || inFlight) {
+        return;
+      }
+      inFlight = true;
       fetchJSON("integrum_security_scanner_db_status", { job_id: jobId }).then(onTick).catch(function() {
-        if (label) {
+        if (!stopped && label) {
           label.textContent = CFG.i18n && CFG.i18n.dbRetrying || "Temporary network issue \u2014 retrying\u2026";
         }
+        scheduleNext();
+      }).finally(function() {
+        inFlight = false;
       });
     }
-    if (stopBtn) {
+    if (stopBtn && !stopBtn.dataset.issDbStopBound) {
+      stopBtn.dataset.issDbStopBound = "1";
       stopBtn.addEventListener("click", function() {
         stopped = true;
+        clearTimer();
         fetchJSON("integrum_security_scanner_db_stop", { job_id: jobId }).finally(function() {
           if (label) {
             label.textContent = CFG.i18n && CFG.i18n.dbStopped || "stopped";
@@ -1330,7 +1395,60 @@
       });
     }
     tick();
-    timer = setInterval(tick, TICK_MS);
+  }
+  function initDbScanStart() {
+    const section = document.querySelector("#iss-db-scan");
+    if (!section) {
+      return;
+    }
+    const startBtn = section.querySelector(".iss-db-scan__start");
+    if (!startBtn) {
+      return;
+    }
+    startBtn.setAttribute("type", "button");
+    startBtn.addEventListener("click", function() {
+      if (startBtn.disabled) {
+        return;
+      }
+      const progressWrap = section.querySelector(".iss-db-progress");
+      const label = section.querySelector(".iss-db-progress__label");
+      const stopBtn = section.querySelector(".iss-db-scan__stop");
+      const resultsWrap = section.querySelector(".iss-db-results");
+      startBtn.disabled = true;
+      if (stopBtn) {
+        stopBtn.disabled = true;
+      }
+      setDbNotice(section, "", "");
+      if (resultsWrap) {
+        resultsWrap.classList.add("hidden");
+      }
+      if (progressWrap) {
+        progressWrap.classList.remove("hidden");
+      }
+      if (label) {
+        label.textContent = CFG.i18n && CFG.i18n.dbStarting || "Starting database scan\u2026";
+      }
+      fetchJSON("integrum_security_scanner_db_start", {}).then(function(payload) {
+        if (!payload || !payload.success || !payload.data || !payload.data.job_id) {
+          const msg = payload && payload.data && payload.data.message || CFG.i18n && CFG.i18n.dbError || "error";
+          setDbNotice(section, "error", msg);
+          if (label) {
+            label.textContent = msg;
+          }
+          startBtn.disabled = false;
+          return;
+        }
+        setDbNotice(section, "success", payload.data.message || "");
+        initDbPolling(String(payload.data.job_id));
+      }).catch(function() {
+        const msg = CFG.i18n && CFG.i18n.dbError || "error";
+        setDbNotice(section, "error", msg);
+        if (label) {
+          label.textContent = msg;
+        }
+        startBtn.disabled = false;
+      });
+    });
   }
   function initDbResultsHydration(jobId) {
     const section = document.querySelector("#iss-db-scan");
@@ -1356,6 +1474,7 @@
   initKeyForm();
   initStopScan();
   initStartForm();
+  initDbScanStart();
   let notifyPreview = function() {
   };
   const treeApi = initDirTree(function() {

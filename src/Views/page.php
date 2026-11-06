@@ -348,7 +348,7 @@ $iss_render_notice = static function ( ?array $notice, string $scope ): void {
 				<input type="hidden" class="iss-db-job-id" value="<?php echo esc_attr( $db_job_id ); ?>" />
 				<input type="hidden" class="iss-db-last-job-id" value="<?php echo esc_attr( $db_last_job_id ?? '' ); ?>" />
 				<button
-					type="submit"
+					type="button"
 					class="iss-db-scan__start inline-flex items-center gap-2 rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500/40 disabled:cursor-not-allowed disabled:opacity-60"
 					<?php disabled( ! $has_key || '' !== $db_job_id ); ?>
 				>

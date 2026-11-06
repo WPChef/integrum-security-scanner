@@ -9,11 +9,12 @@ import { initPreview } from './preview.js';
 import { initPolling } from './status.js';
 import { initResultsFilter } from './results.js';
 import { initNotices } from './notices.js';
-import { initDbPolling, initDbResultsHydration } from './dbScan.js';
+import { initDbPolling, initDbResultsHydration, initDbScanStart } from './dbScan.js';
 
 initKeyForm();
 initStopScan();
 initStartForm();
+initDbScanStart();
 
 // Directory tree ← preview: the tree reports toggles, the preview refreshes
 // (debounced) with the new scope. The hoisted `notifyPreview` keeps the
