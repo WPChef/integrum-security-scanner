@@ -140,17 +140,28 @@ final class LicensingService {
 	private function api_error_message( array $body, string $fallback = '', int $http_code = 0 ): string {
 		$text = $this->api_error_text( $body );
 
-		if ( '' === $text ) {
-			return '' !== $fallback ? $fallback : __( 'Registration failed. Please try again.', 'integrum-security-scanner' );
-		}
-
 		// Only a client-side rejection can mean "this domain is already taken";
 		// a 5xx body mentioning "already" is a server failure, not a duplicate.
-		if ( $http_code >= 400 && $http_code < 500 && false !== stripos( $text, 'already' ) ) {
+		if ( '' !== $text && $http_code >= 400 && $http_code < 500 && false !== stripos( $text, 'already' ) ) {
 			return rtrim( $text, ' .' ) . '. ' . __( 'Paste the site key in the field below and save it manually.', 'integrum-security-scanner' );
 		}
 
-		return $text;
+		// Surface the API payload 1:1 (LLAR often wraps Imunify failures as a
+		// bare {"message":"Bad Imunify Response"} — hiding the HTTP code made
+		// that look like a plugin bug).
+		$json = array() !== $body
+			? (string) wp_json_encode( $body, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE )
+			: '';
+
+		if ( '' !== $json ) {
+			return $http_code > 0 ? sprintf( 'HTTP %d %s', $http_code, $json ) : $json;
+		}
+
+		if ( '' !== $text ) {
+			return $http_code > 0 ? sprintf( 'HTTP %d: %s', $http_code, $text ) : $text;
+		}
+
+		return '' !== $fallback ? $fallback : __( 'Registration failed. Please try again.', 'integrum-security-scanner' );
 	}
 
 	/**
